@@ -6,15 +6,16 @@ import HouseholdClientPage from "./client-page";
 
 export default async function Page() {
     const session = await auth();
-    if (!session?.user?.name) {
-        redirect("/sign-in");
+    if (!session?.user?.id) {
+        redirect("/login");
     }
-
-    const household = await getHouseholdById(session.user.name);
+    const userId = parseInt(session.user.id);
+    
+    const household = await getHouseholdById(userId);
     if (!household) {
         redirect("/household/create");
     }
 
-    return <HouseholdClientPage household={household} />;
+    return <HouseholdClientPage household={household} userId={userId} />;
 }
 

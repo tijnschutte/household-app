@@ -13,6 +13,7 @@ model User {
   password    String
   householdId Int?
   household   Household? @relation(fields: [householdId], references: [id])
+  groceries   Grocery[]
 }
 
 model Household {
@@ -25,8 +26,10 @@ model Household {
 model Grocery {
   id          Int        @id @default(autoincrement())
   name        String
-  quantity    Int
-  bought      Boolean
-  householdId Int?
+  quantity    Int?       @default(1)
+  bought      Boolean?   @default(false)
   household   Household? @relation(fields: [householdId], references: [id])
+  householdId Int?
+  User        User?      @relation(fields: [userId], references: [id])
+  userId      Int?
 }

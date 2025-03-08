@@ -12,10 +12,10 @@ export async function fetchHouseholds() {
     }
 }
 
-export async function getHouseholdById(username: string) : Promise<Household | null> {
+export async function getHouseholdById(userId: number) : Promise<Household | null> {
     try {
         const user = await prisma.user.findUnique({
-              where: { name: username },
+              where: { id: userId },
               include: { household: true }
         });
             return user?.household || null;
@@ -26,15 +26,28 @@ export async function getHouseholdById(username: string) : Promise<Household | n
 }
 
 
-export async function getGroceryList(householdId: number, bought: boolean) {
+export async function getGroceryList(householdId: number, userId: number, showPersonal: boolean) {
     try {
-        const groceryList = await prisma.grocery.findMany({
-            where: { 
-                householdId: householdId,
-                bought: bought
-             },
-        });
+        let groceryList;
+
+        if (showPersonal) {
+            groceryList = await prisma.grocery.findMany({
+                where: { 
+                    userId: userId,
+                    bought: false,
+                },
+            });
+        } else {
+            groceryList = await prisma.grocery.findMany({
+                where: { 
+                    householdId: householdId,
+                    bought: false
+                },
+            });
+        }
+
         return groceryList;
+
     } catch (error) {
         console.error('Failed to fetch grocery list:', error);
         throw new Error('Failed to fetch grocery list.');
