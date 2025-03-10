@@ -54,7 +54,7 @@ export default function HouseholdClientPage({ household, userId } : {household :
             </div>
 
             {/* Middle Section (Takes Remaining Space) */}
-            <div className="flex-1 overflow-auto p-4 bg-white">
+            <div className="flex-1 overflow-auto p-4">
                 <h2 className="text-lg font-semibold mb-2">
                     <span>
                         {showPersonal ? "Persoonlijke boodschappen" : "Huis boodschappen"}
