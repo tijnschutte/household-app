@@ -1,15 +1,17 @@
-import type { Config } from 'tailwindcss';
+import type { Config } from "tailwindcss";
 
 const config: Config = {
-    darkMode: ['class'],
-    content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
+  darkMode: ["class", "html"], // ✅ Ensure dark mode works properly
+  content: [
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",       // ✅ Scan `app/` directory
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",// ✅ Scan `components/`
+    "./ui/**/*.{js,ts,jsx,tsx,mdx}",        // ✅ Scan `ui/`
+    "./public/**/*.html",                   // ✅ Ensure it scans static HTML files
   ],
   theme: {
-  	extend: {},
+    extend: {},
   },
   plugins: [],
 };
+
 export default config;

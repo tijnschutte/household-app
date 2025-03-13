@@ -3,7 +3,7 @@
 import { signIn } from '@/auth';
 import prisma from '@/lib/prisma';
 import { AuthError } from 'next-auth';
-  
+
 export async function authenticate(
   prevState: string | undefined,
   formData: FormData,
@@ -12,21 +12,27 @@ export async function authenticate(
     await signIn('credentials', formData);
   } catch (error) {
     if (error instanceof AuthError) {
-      switch (error.type) {
-        case 'CredentialsSignin':
-          return 'Invalid credentials.';
-        default:
-          return 'Something went wrong.';
+      return 'Something went wrong.';
       }
+      throw error;
     }
-    throw error;
-  }
 }
+
 
 export async function createHousehold(formData: FormData) {}
 
 export async function createGroceryItem(name: string, userId: number | undefined, householdId: number | undefined) {
   try {
+    const storedItem = await prisma.grocery.findFirst({
+      where: {
+        name: name.toLowerCase(),
+        userId: userId,
+        householdId: householdId,
+      },
+    });
+    if (storedItem) {
+      throw new Error('Item already in db.');
+    }
     const groceryItem = await prisma.grocery.create({
       data : {
         name : name.toLowerCase(),
