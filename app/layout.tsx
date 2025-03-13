@@ -6,7 +6,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={`${inter.className} antialiased min-h-screen`}>
         {/* <div className=""> */}
-          {children}
+        {children}
         {/* </div> */}
       </body>
     </html>

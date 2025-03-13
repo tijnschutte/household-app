@@ -9,13 +9,23 @@ export async function authenticate(
   formData: FormData,
 ) {
   try {
-    await signIn('credentials', formData);
+    const res = await signIn("credentials", {
+      redirect: false, 
+      name: formData.get("name"),
+      password: formData.get("password"),
+    });
+
+    if (res?.error) {
+      return res.error;
+    }
+
+    return null;
   } catch (error) {
     if (error instanceof AuthError) {
-      return 'Something went wrong.';
-      }
-      throw error;
+      return error.message;
     }
+    return "An unexpected error occurred. Please try again.";
+  }
 }
 
 
@@ -56,5 +66,18 @@ export async function buyGroceryItem(id: number) {
   } catch (error) {
     console.error('Failed to buy grocery:', error);
     throw new Error('Failed to buy grocery.');
+  }
+}
+
+export async function deleteItems(ids: number[]) {
+  try {
+    await prisma.grocery.deleteMany({
+      where: {
+          id: { in: ids }, // Deletes all items with these IDs
+      },
+  });
+  } catch (error) {
+    console.error('Failed to delete grocery:', error);
+    throw new Error('Failed to delete grocery.');
   }
 }

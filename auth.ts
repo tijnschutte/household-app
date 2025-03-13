@@ -28,30 +28,35 @@ export const { auth, signIn, signOut } = NextAuth({
     providers: [
         Credentials({
           async authorize(credentials) {
-
             const parsedCredentials = z
               .object({ 
                 name: z.string().min(3), 
                 password: z.string().min(6) 
               })
               .safeParse(credentials);
-    
-            if (!parsedCredentials.success) return null;
-            
+          
+            if (!parsedCredentials.success) {
+              throw new Error("Invalid input: Name must be at least 3 characters and password at least 6 characters.");
+            }
+          
             const { name, password } = parsedCredentials.data;
             const user = await getUser(name);
-            if (!user) return null;
-                
-            const passwordsMatch = await bcrypt.compare(password, user.password);
-            if (passwordsMatch) {
-                return {
-                  id: user.id.toString(),
-                  name: user.name,
-                  householdId: user.householdId
-              };
+            
+            if (!user) {
+              throw new Error("No user found with this name.");
             }
-            return null;
-          },
+          
+            const passwordsMatch = await bcrypt.compare(password, user.password);
+            if (!passwordsMatch) {
+              throw new Error("Incorrect password.");
+            }
+          
+            return {
+              id: user.id.toString(),
+              name: user.name,
+              householdId: user.householdId
+            };
+          }
         }),
       ],
   });
