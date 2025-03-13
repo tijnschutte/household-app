@@ -60,7 +60,7 @@ export default function HouseholdClientPage({ household, userId }: { household: 
     };
 
     return (
-        <main className="flex flex-col h-screen justify-center items-center h-full overflow-x-hidden w-full font-sarif">
+        <main className="flex flex-col h-screen justify-center items-center overflow-x-hidden w-full font-sarif">
             {/* Top Section */}
             <div className="bg-red-300 w-full z-10 border-b">
                 <h1 className="text-center p-4 text-xl text-white font-bold">
@@ -72,6 +72,7 @@ export default function HouseholdClientPage({ household, userId }: { household: 
                     {showPersonal ? "Persoonlijke boodschappen" : "Huis boodschappen"}
                 </h2>
             </div>
+            
             {/* Middle Section (Takes Remaining Space) */}
             <div className="flex-1 mx-auto max-w-xl w-full px-6 p-6 overflow-x-hidden">
                 <ul className="overflow-x-hidden">
