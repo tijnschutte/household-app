@@ -28,14 +28,11 @@ export default function GroceryList({
         <li
             key={item.id}
             onClick={() => toggleSelection(item.id)}
-            className={`flex items-center space-x-3 p-2 rounded w-full ${selectedItems.has(item.id) ? "bg-gray-200 scale-95" : ""}`}
+            className={`flex items-center space-x-3 p-3 rounded w-full ${selectedItems.has(item.id) ? "bg-gray-200 scale-95" : ""}`}
         >
-            <span className="truncate w-full min-w-0">
-                {selectedItems.has(item.id) ? (
-                    <del>{item.name + ' ✅'}</del>
-                ) : (
-                    item.name
-                )}
+            <div className="w-2 h-2 bg-gray-500 rounded-full flex-shrink-0"></div>
+            <span className="truncate w-full text-lg min-w-0 first-letter:uppercase">
+                {selectedItems.has(item.id) ? <del>{item.name}</del> : item.name}
             </span>
         </li>
     ));
@@ -43,11 +40,10 @@ export default function GroceryList({
     return (
         <div className="flex-1 mx-auto max-w-xl w-full px-10 p-6 overflow-x-hidden">
             <ul 
-                className="overflow-y-auto overflow-x-hidden max-h-96"
-                // className="overflow-x-hidden"
+                className="overflow-y-auto overflow-x-hidden max-h-96 pb-24"
                 style={{ scrollBehavior: "smooth" }}
                 ref={listRef}
-                >
+            >
                 {isLoading && <li>...</li>}
                 {!isLoading && groceryList.length > 0 ? groceries : null}
             </ul>

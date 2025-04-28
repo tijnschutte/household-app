@@ -2,7 +2,7 @@
 
 import { Grocery, Household } from "@prisma/client";
 import { useEffect, useRef, useState } from "react";
-import { Check, X, User, House, CircleSmall, ArrowLeft } from "lucide-react";
+import { Check, X, User, House, CircleSmall, ArrowLeft, Plus, Trash2, Minus, Trash, ShoppingBasket } from "lucide-react";
 import { getGroceryList } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { createGroceryItem, deleteItems } from "@/src/lib/actions";
@@ -86,31 +86,28 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     return (
         <main className="flex flex-col w-full h-screen">
             {/* Top Section */}
-            <div className="flex flex-col justify-center items-center">
-                <div className="w-full flex bg-blue-300 p-4 items-center justify-start">
-                    <div className="col-span-4 flex justify-center w-full">
-                        <h1 className="text-xl text-white font-bold">
-                            Boodschappen
-                        </h1>
-                    </div>
-                </div>
-                <div className="bg-white p-6">
-                    <h2 className="text-xl font-semibold">
-                        {showPersonal ? "Persoonlijk" : "Huis"}
+            <div className="flex flex-col justify-end from-sky-950 to-sky-800 bg-gradient-to-b w-full pt-4 px-5">
+                    {/* <h1 className="text-md text-white font-semibold"> Boodschappen. </h1> */}
+                    <ShoppingBasket color="white"/>
+                <div className="flex py-2 justify-center items-center">
+                    <h2 className="text-2xl text-white font-semibold">
+                        {showPersonal ? "Persoonlijk" : household.name}
                     </h2>
                 </div>
             </div>
 
             {/* Middle Section (Takes Remaining Space) */}
-            <GroceryList 
-                groceryList={groceryList} 
-                isLoading={isLoading} 
-                selectedItems={selectedItems} 
-                toggleSelection={toggleSelection}
-            />
+            <div className="w-full flex-1 overflow-y-auto">
+                <GroceryList 
+                    groceryList={groceryList} 
+                    isLoading={isLoading} 
+                    selectedItems={selectedItems} 
+                    toggleSelection={toggleSelection}
+                />
+            </div>
 
             {/* Bottom Section (Always at the Bottom) */}
-            <div className="w-full py-4 px-4">
+            <div className="w-full pb-4 px-4">
                 {selectedItems.size > 0 && (
                     <div className="flex justify-center items-center gap-4 p-4 w-full max-w-xl mx-auto">
                         <button className="bg-red-500 text-white px-4 py-2 rounded"
@@ -118,7 +115,7 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                             aria-disabled={isPending}
                             disabled={isPending}
                         >
-                            {isPending ? <span>...</span> : <span>remove</span>}
+                            {isPending ? <span>...</span> : <Trash2 />}
                         </button>
                     </div>
                 )}
@@ -144,7 +141,7 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                         aria-disabled={isPending}
                         disabled={isPending}
                     >
-                        {isPending ? <span>...</span> : <span><Check /></span>}
+                        {isPending ? <span>...</span> : <span><Plus /></span>}
                     </button>
                 </div>
                 <div className="relative flex flex-row justify-center gap-4 p-4">
