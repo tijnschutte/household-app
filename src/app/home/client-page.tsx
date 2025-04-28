@@ -84,12 +84,11 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     };
 
     return (
-        <main className="flex flex-col w-full h-screen">
+        <main className="flex flex-col w-full h-screen pb-24">
             {/* Top Section */}
-            <div className="flex flex-col justify-end from-sky-950 to-sky-800 bg-gradient-to-b w-full pt-4 px-5">
-                    {/* <h1 className="text-md text-white font-semibold"> Boodschappen. </h1> */}
-                    <ShoppingBasket color="white"/>
-                <div className="flex py-2 justify-center items-center">
+            <div className="flex flex-col justify-end from-sky-950 to-sky-800 bg-gradient-to-b w-full py-4">
+                <div className="flex flex-row justify-center items-center">
+                    <div className="absolute left-4"><ShoppingBasket color="white"/></div>
                     <h2 className="text-2xl text-white font-semibold">
                         {showPersonal ? "Persoonlijk" : household.name}
                     </h2>
