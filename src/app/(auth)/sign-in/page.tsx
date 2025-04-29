@@ -11,7 +11,7 @@ const Page = async () => {
   if (session) redirect("/");
 
   return (
-    <div className="w-full max-w-sm mx-auto space-y-6">
+    <div className="w-full space-y-6 px-10">
       <h1 className="text-2xl font-bold text-center mb-6">Sign In</h1>
       
       {/* Email/Password Sign In */}

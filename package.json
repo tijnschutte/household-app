@@ -58,5 +58,14 @@
     "tailwindcss-animate": "^1.0.7",
     "tailwindcss-cli": "^0.1.2",
     "tsx": "^4.19.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma",
+      "sharp"
+    ]
   }
 }

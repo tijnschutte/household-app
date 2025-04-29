@@ -12,7 +12,7 @@ const Page = async () => {
   const home = await findHomeByUserId(Number(session.user?.id));
   
   return (
-    <>
+    <main className="flex flex-col items-center justify-center min-h-screen p-4">
       <div className="bg-gray-100 rounded-lg p-4 text-center mb-6">
         <p className="text-gray-600">Signed in as:</p>
         <p className="font-medium">{session.user?.name}</p>
@@ -25,7 +25,7 @@ const Page = async () => {
         </Link>
         <SignOut />
       </div>
-    </>
+    </main>
   );
 };
 

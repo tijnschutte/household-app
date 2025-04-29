@@ -38,15 +38,12 @@ export default function GroceryList({
     ));
     
     return (
-        <div className="flex-1 mx-auto max-w-xl w-full px-10 p-6 overflow-x-hidden">
-            <ul 
-                className="overflow-y-auto overflow-x-hidden max-h-96 pb-24"
-                style={{ scrollBehavior: "smooth" }}
-                ref={listRef}
-            >
-                {isLoading && <li>...</li>}
-                {!isLoading && groceryList.length > 0 ? groceries : null}
-            </ul>
-        </div>
+        <ul 
+            ref={listRef}
+            className="flex-1 overflow-y-auto pb-24"
+        >
+            {isLoading && <li>Loading...</li>}
+            {!isLoading && groceryList.length > 0 ? groceries : null}
+        </ul>
     )
 }

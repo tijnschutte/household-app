@@ -7,6 +7,7 @@ import { getGroceryList } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { createGroceryItem, deleteItems } from "@/src/lib/actions";
 import GroceryList from "@/src/components/house/grocery-list";
+import { SheetFooter } from "@/src/components/ui/sheet";
 
 type HouseholdClientPageProps = {
     household: Household;
@@ -84,11 +85,12 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     };
 
     return (
-        <main className="flex flex-col w-full h-screen pb-24">
+        <div className="flex flex-col h-[100dvh] w-full overflow-hidden">
             {/* Top Section */}
-            <div className="flex flex-col justify-end from-sky-950 to-sky-800 bg-gradient-to-b w-full py-4">
+            <div className="sticky top-0 from-sky-950 to-sky-800 bg-gradient-to-b w-full py-4 z-20 border"> 
+                {/*    */}
                 <div className="flex flex-row justify-center items-center">
-                    <div className="absolute left-4"><ShoppingBasket color="white"/></div>
+                    <div className="absolute left-4"><ShoppingBasket color="white" /></div>
                     <h2 className="text-2xl text-white font-semibold">
                         {showPersonal ? "Persoonlijk" : household.name}
                     </h2>
@@ -96,7 +98,7 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
             </div>
 
             {/* Middle Section (Takes Remaining Space) */}
-            <div className="w-full flex-1 overflow-y-auto">
+            <div className="flex flex-col flex-1 min-h-0 w-full max-w-xl p-6">
                 <GroceryList 
                     groceryList={groceryList} 
                     isLoading={isLoading} 
@@ -104,12 +106,12 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                     toggleSelection={toggleSelection}
                 />
             </div>
-
+        
             {/* Bottom Section (Always at the Bottom) */}
-            <div className="w-full pb-4 px-4">
+            <div className="sticky bottom-0 w-full bg-white shadow-inner px-4 pt-4 z-10">
                 {selectedItems.size > 0 && (
-                    <div className="flex justify-center items-center gap-4 p-4 w-full max-w-xl mx-auto">
-                        <button className="bg-red-500 text-white px-4 py-2 rounded"
+                    <div className="flex justify-center items-center p-2">
+                        <button className="bg-red-500 text-white p-2"
                             onClick={removeGroceries}
                             aria-disabled={isPending}
                             disabled={isPending}
@@ -118,7 +120,7 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                         </button>
                     </div>
                 )}
-                <div className="flex flex-row justify-center items-center gap-4 p-4 w-full max-w-xl mx-auto">
+                <div className="flex flex-row justify-center items-center p-4 gap-4 w-full max-w-xl mx-auto">
                     <Input className="bg-white"
                         placeholder="Voeg een item toe"
                         value={itemName}
@@ -132,11 +134,7 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                     />
                     <button
                         onClick={addItem}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && !isPending) {
-                                addItem();
-                            }
-                        }}
+                        onKeyDown={(e) => {if (e.key === "Enter" && !isPending) {addItem();}}}
                         aria-disabled={isPending}
                         disabled={isPending}
                     >
@@ -159,6 +157,6 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                     </button>
                 </div>
             </div>
-        </main>
+        </div>
     );
 }
