@@ -85,7 +85,7 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     };
 
     return (
-        <div className="flex flex-col h-full border w-full overflow-hidden">
+        <div className="flex flex-col h-full w-full overflow-hidden">
             {/* Top Section */}
             <div className="sticky top-0 from-sky-950 to-sky-800 bg-gradient-to-b w-full py-4 z-20 border"> 
                 {/*    */}
