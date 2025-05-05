@@ -10,7 +10,7 @@ const Page = async () => {
   if (session) redirect("/");
 
   return (
-    <div className="w-full space-y-6 px-10">
+    <div className="flex flex-col w-full h-full justify-center items-center space-y-6 px-10">
       <h1 className="text-2xl font-bold text-center mb-6">Create Account</h1>
 
       {/* Email/Password Sign Up */}

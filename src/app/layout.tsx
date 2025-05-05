@@ -3,9 +3,9 @@ import { myFont } from "@/src/app/fonts";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${myFont.className} antialiased w-full min-h-screen`}>
-        <main className="flex flex-col flex-1 items-center justify-center border h-[100dvh]">
+    <html lang="en" className="h-full">
+      <body className={`${myFont.className} antialiased h-full w-full flex flex-col`}>
+        <main className="flex-grow">
           {children}
         </main>
       </body>
