@@ -8,19 +8,21 @@ import { auth, signOut } from "@/src/lib/auth";
 
 export default async function Page() {
     const session = await auth();
-    console.log("session:", session);
     if (!session?.user?.id) {
         redirect("/sign-in");
     }
-    const householdId = await getHouseholdById(Number(session.user?.id));
-    console.log("householdId:", householdId);
+    const userId = parseInt(session.user.id, 10);
+    if (isNaN(userId)) {
+        redirect("/sign-in");
+    }
+    const householdId = await getHouseholdById(userId);
     if (!householdId) {
         redirect("/");
     }
 
     return <HouseholdClientPage 
                 household={householdId} 
-                userId={Number(session.user?.id)} 
+                userId={userId} 
             />;
 }
 
