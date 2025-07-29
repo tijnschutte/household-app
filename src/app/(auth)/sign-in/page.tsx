@@ -7,7 +7,6 @@ import { executeAction } from "@/src/lib/executeAction";
 
 const Page = async () => {
   const session = await auth();
-  console.log("Session:", session);
   if (session) redirect("/");
 
   return (

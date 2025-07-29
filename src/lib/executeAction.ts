@@ -21,9 +21,12 @@ const executeAction = async <T>({
       throw error;
     }
 
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error("Action execution failed:", error);
+
     return {
       success: false,
-      message: "An error has occurred during executing the action",
+      message: `Action failed: ${errorMessage}`,
     };
   }
 };
