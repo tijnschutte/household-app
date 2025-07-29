@@ -169,3 +169,21 @@ export async function deleteItems(ids: number[], userId: number, householdId?: n
     throw new Error('Failed to delete grocery.');
   }
 }
+
+export async function restoreItems(items: Array<{name: string, userId?: number | null, householdId?: number | null}>) {
+  try {
+    // Restore items by creating them again (since we can't restore original IDs)
+    await prisma.grocery.createMany({
+      data: items.map(item => ({
+        name: item.name,
+        userId: item.userId,
+        householdId: item.householdId,
+        bought: false // Always restore as not bought
+      })),
+      skipDuplicates: true // Prevent duplicates if item was already recreated
+    });
+  } catch (error) {
+    console.error('Failed to restore items:', error);
+    throw new Error('Failed to restore items');
+  }
+}

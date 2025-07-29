@@ -5,7 +5,7 @@ import { useEffect, useReducer, useCallback } from "react";
 import { User, House, Plus, Trash2, ShoppingBasket, Check, CheckCheck, MousePointerClick } from "lucide-react";
 import { getGroceryList } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
-import { createGroceryItem, deleteItems, updateGroceryItem, markItemsAsBought, clearCompletedItems } from "@/src/lib/actions";
+import { createGroceryItem, deleteItems, updateGroceryItem, markItemsAsBought, clearCompletedItems, restoreItems } from "@/src/lib/actions";
 import GroceryList from "@/src/components/house/grocery-list";
 import toast, { Toaster } from 'react-hot-toast';
 import { useLocalStorage } from "@/src/lib/hooks/useLocalStorage";
@@ -22,8 +22,10 @@ type GroceryState = {
   isLoading: boolean;
   isPending: boolean;
   itemName: string;
+  searchQuery: string;
   selectedItems: Set<number>;
   optimisticOperations: Map<string, any>;
+  undoStack: Array<{ action: string; data: any; timestamp: number }>;
 };
 
 type GroceryAction = 
@@ -31,6 +33,7 @@ type GroceryAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_PENDING'; payload: boolean }
   | { type: 'SET_ITEM_NAME'; payload: string }
+  | { type: 'SET_SEARCH_QUERY'; payload: string }
   | { type: 'TOGGLE_PERSONAL'; payload: boolean }
   | { type: 'TOGGLE_SELECTION'; payload: number }
   | { type: 'SELECT_ALL' }
@@ -45,7 +48,9 @@ type GroceryAction =
   | { type: 'REMOVE_ITEMS'; payload: number[] }
   | { type: 'ROLLBACK_OPTIMISTIC'; payload: Grocery[] }
   | { type: 'SET_OPTIMISTIC_OP'; payload: { id: string; operation: any } }
-  | { type: 'CLEAR_OPTIMISTIC_OP'; payload: string };
+  | { type: 'CLEAR_OPTIMISTIC_OP'; payload: string }
+  | { type: 'ADD_TO_UNDO_STACK'; payload: { action: string; data: any; timestamp: number } }
+  | { type: 'UNDO_LAST_ACTION' };
 
 const groceryReducer = (state: GroceryState, action: GroceryAction): GroceryState => {
   switch (action.type) {
@@ -57,8 +62,10 @@ const groceryReducer = (state: GroceryState, action: GroceryAction): GroceryStat
       return { ...state, isPending: action.payload };
     case 'SET_ITEM_NAME':
       return { ...state, itemName: action.payload };
+    case 'SET_SEARCH_QUERY':
+      return { ...state, searchQuery: action.payload };
     case 'TOGGLE_PERSONAL':
-      return { ...state, showPersonal: action.payload, selectedItems: new Set() };
+      return { ...state, showPersonal: action.payload, selectedItems: new Set(), searchQuery: '' };
     case 'TOGGLE_SELECTION': {
       const newSelected = new Set(state.selectedItems);
       if (newSelected.has(action.payload)) {
@@ -122,6 +129,15 @@ const groceryReducer = (state: GroceryState, action: GroceryAction): GroceryStat
       newOps.delete(action.payload);
       return { ...state, optimisticOperations: newOps };
     }
+    case 'ADD_TO_UNDO_STACK': {
+      const newStack = [...state.undoStack, action.payload].slice(-10); // Keep last 10 actions
+      return { ...state, undoStack: newStack };
+    }
+    case 'UNDO_LAST_ACTION': {
+      if (state.undoStack.length === 0) return state;
+      const newStack = state.undoStack.slice(0, -1);
+      return { ...state, undoStack: newStack };
+    }
     default:
       return state;
   }
@@ -133,8 +149,10 @@ const initialState: GroceryState = {
   isLoading: false,
   isPending: false,
   itemName: '',
+  searchQuery: '',
   selectedItems: new Set(),
-  optimisticOperations: new Map()
+  optimisticOperations: new Map(),
+  undoStack: []
 };
 
 export default function HouseholdClientPage({ household, userId }: HouseholdClientPageProps) {
@@ -142,26 +160,43 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     const [persistedItemName, setPersistedItemName] = useLocalStorage('grocery-input', '');
     const [persistedSelectedItems, setPersistedSelectedItems] = useLocalStorage<number[]>('selected-items', []);
 
-    // Restore persisted state on mount
+    // Restore persisted state on mount (only once)
     useEffect(() => {
-        if (persistedItemName) {
+        if (persistedItemName && state.itemName === '') {
             dispatch({ type: 'SET_ITEM_NAME', payload: persistedItemName });
         }
-        if (persistedSelectedItems.length > 0) {
+    }, []); // Empty dependency array - run only on mount
+    
+    useEffect(() => {
+        if (persistedSelectedItems.length > 0 && state.selectedItems.size === 0) {
             persistedSelectedItems.forEach(id => {
                 dispatch({ type: 'TOGGLE_SELECTION', payload: id });
             });
         }
-    }, [persistedItemName, persistedSelectedItems]);
+    }, []); // Empty dependency array - run only on mount
 
-    // Persist state changes
+    // Persist state changes (debounced to avoid excessive writes)
     useEffect(() => {
-        setPersistedItemName(state.itemName);
-    }, [state.itemName, setPersistedItemName]);
+        const timeoutId = setTimeout(() => {
+            if (state.itemName !== persistedItemName) {
+                setPersistedItemName(state.itemName);
+            }
+        }, 500);
+        return () => clearTimeout(timeoutId);
+    }, [state.itemName, persistedItemName, setPersistedItemName]);
 
     useEffect(() => {
-        setPersistedSelectedItems(Array.from(state.selectedItems));
-    }, [state.selectedItems, setPersistedSelectedItems]);
+        // Only persist selection if not loading and selection has changed
+        if (!state.isLoading) {
+            const currentSelection = Array.from(state.selectedItems);
+            const timeoutId = setTimeout(() => {
+                if (JSON.stringify(currentSelection) !== JSON.stringify(persistedSelectedItems)) {
+                    setPersistedSelectedItems(currentSelection);
+                }
+            }, 500);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [state.selectedItems, state.isLoading, persistedSelectedItems, setPersistedSelectedItems]);
     
     const fetchGroceries = useCallback(async () => {
         dispatch({ type: 'SET_LOADING', payload: true });
@@ -180,22 +215,42 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     }, [fetchGroceries]);
 
     const removeGroceries = useCallback(async () => {
+        if (state.selectedItems.size === 0) {
+            toast.error('No items selected');
+            return;
+        }
+        
         dispatch({ type: 'SET_PENDING', payload: true });
         try {
             const deletedItems = Array.from(state.selectedItems);
+            const itemsToDelete = state.groceryList.filter(item => deletedItems.includes(item.id));
+            
+            // Add to undo stack before deletion
+            dispatch({
+                type: 'ADD_TO_UNDO_STACK',
+                payload: {
+                    action: 'delete',
+                    data: { items: itemsToDelete },
+                    timestamp: Date.now()
+                }
+            });
+            
             await deleteItems(
                 deletedItems, 
                 userId, 
                 state.showPersonal ? undefined : household.id
             );
             dispatch({ type: 'REMOVE_ITEMS', payload: deletedItems });
-            toast.success(`Deleted ${deletedItems.length} item(s)`);
+            toast.success(`Deleted ${deletedItems.length} item(s). Tap undo to restore`, {
+                duration: 5000,
+                icon: '🗑️'
+            });
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Failed to delete items');
         } finally {
             dispatch({ type: 'SET_PENDING', payload: false });
         }
-    }, [state.selectedItems, userId, household.id, state.showPersonal]);
+    }, [state.selectedItems, userId, household.id, state.showPersonal, state.groceryList]);
 
     const toggleSelection = useCallback((id: number) => {
         dispatch({ type: 'TOGGLE_SELECTION', payload: id });
@@ -289,12 +344,69 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
         }
     }, [userId, household.id, state.showPersonal]);
 
+    const getFilteredGroceries = useCallback(() => {
+        if (!state.searchQuery.trim()) return state.groceryList;
+        
+        const query = state.searchQuery.toLowerCase().trim();
+        return state.groceryList.filter(item => 
+            item.name.toLowerCase().includes(query)
+        );
+    }, [state.groceryList, state.searchQuery]);
+    
     const selectAll = useCallback(() => {
-        dispatch({ type: 'SELECT_ALL' });
-        toast.success('All items selected');
-    }, []);
+        const visibleItems = getFilteredGroceries();
+        if (visibleItems.length === 0) return;
+        
+        dispatch({ type: 'CLEAR_SELECTION' });
+        visibleItems.forEach(item => {
+            dispatch({ type: 'TOGGLE_SELECTION', payload: item.id });
+        });
+        toast.success(`Selected ${visibleItems.length} visible items`);
+    }, [getFilteredGroceries]);
+    
+    const undoLastAction = useCallback(async () => {
+        if (state.undoStack.length === 0) {
+            toast.error('Nothing to undo');
+            return;
+        }
+        
+        const lastAction = state.undoStack[state.undoStack.length - 1];
+        
+        if (lastAction.action === 'delete') {
+            try {
+                // Restore items to database
+                await restoreItems(lastAction.data.items.map((item: Grocery) => ({
+                    name: item.name,
+                    userId: item.userId,
+                    householdId: item.householdId
+                })));
+                
+                // Refresh grocery list to include restored items
+                await fetchGroceries();
+                dispatch({ type: 'UNDO_LAST_ACTION' });
+                toast.success('Items restored!', { icon: '↩️' });
+            } catch (error) {
+                toast.error('Failed to restore items');
+            }
+        }
+    }, [state.undoStack, fetchGroceries]);
+    
+    const filteredGroceries = getFilteredGroceries();
 
     const handleSwipeDelete = useCallback(async (itemId: number) => {
+        const itemToDelete = state.groceryList.find(item => item.id === itemId);
+        if (!itemToDelete) return;
+        
+        // Add to undo stack before deletion
+        dispatch({
+            type: 'ADD_TO_UNDO_STACK',
+            payload: {
+                action: 'delete',
+                data: { items: [itemToDelete] },
+                timestamp: Date.now()
+            }
+        });
+        
         // Optimistic update
         dispatch({ type: 'REMOVE_ITEM_OPTIMISTIC', payload: itemId });
         
@@ -304,13 +416,16 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                 userId, 
                 state.showPersonal ? undefined : household.id
             );
-            toast.success('Item deleted!');
+            toast.success('Item deleted! Tap undo to restore', {
+                duration: 5000,
+                icon: '🗑️'
+            });
         } catch (error) {
             // Rollback optimistic update
             await fetchGroceries();
             toast.error(error instanceof Error ? error.message : 'Failed to delete item');
         }
-    }, [userId, household.id, state.showPersonal, fetchGroceries]);
+    }, [userId, household.id, state.showPersonal, fetchGroceries, state.groceryList]);
 
     return (
         <ErrorBoundary>
@@ -326,10 +441,25 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                 </div>
             </div>
 
+            {/* Search Section */}
+            <div className="px-4 py-2 border-b bg-white">
+                <Input 
+                    placeholder="Search items..."
+                    value={state.searchQuery}
+                    onChange={(e) => dispatch({ type: 'SET_SEARCH_QUERY', payload: e.target.value })}
+                    className="bg-gray-50"
+                />
+                {state.searchQuery && (
+                    <div className="text-sm text-gray-500 mt-1">
+                        {filteredGroceries.length} of {state.groceryList.length} items
+                    </div>
+                )}
+            </div>
+
             {/* Middle Section (Takes Remaining Space) */}
             <div className="flex flex-col flex-1 min-h-0 w-full max-w-xl p-6">
                 <GroceryList 
-                    groceryList={state.groceryList} 
+                    groceryList={filteredGroceries} 
                     isLoading={state.isLoading} 
                     selectedItems={state.selectedItems} 
                     toggleSelection={toggleSelection}
@@ -340,44 +470,57 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
         
             {/* Bottom Section (Always at the Bottom) */}
             <div className="sticky bottom-0 w-full bg-white shadow-inner px-4 pt-4 z-10">
-                {state.selectedItems.size > 0 && (
-                    <div className="flex justify-center items-center gap-2 p-2">
-                        <button 
-                            className="bg-green-500 text-white p-2 rounded hover:bg-green-600 disabled:opacity-50"
-                            onClick={handlemarkItemsAsBought}
-                            disabled={state.isPending}
-                            title="Mark as bought"
-                        >
-                            <Check size={16} />
-                        </button>
-                        <button 
-                            className="bg-red-500 text-white p-2 rounded hover:bg-red-600 disabled:opacity-50"
-                            onClick={removeGroceries}
-                            disabled={state.isPending}
-                            title="Delete selected"
-                        >
-                            <Trash2 size={16} />
-                        </button>
-                    </div>
-                )}
+                <div className="min-h-[40px] flex justify-center items-center">
+                    {state.selectedItems.size > 0 && (
+                        <div className="flex justify-center items-center gap-2 p-2 animate-in fade-in duration-200">
+                            <button 
+                                className="bg-green-500 text-white p-2 rounded hover:bg-green-600 disabled:opacity-50 transition-all"
+                                onClick={handlemarkItemsAsBought}
+                                disabled={state.isPending}
+                                title="Mark as bought"
+                            >
+                                <Check size={16} />
+                            </button>
+                            <button 
+                                className="bg-red-500 text-white p-2 rounded hover:bg-red-600 disabled:opacity-50 transition-all"
+                                onClick={removeGroceries}
+                                disabled={state.isPending}
+                                title="Delete selected"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                            <span className="text-sm text-gray-600 ml-2">
+                                {state.selectedItems.size} selected
+                            </span>
+                        </div>
+                    )}
+                </div>
                 
                 {/* Bulk operation buttons */}
                 <div className="flex justify-center items-center gap-2 p-2">
                     <button 
-                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 disabled:opacity-50"
                         onClick={selectAll}
-                        disabled={state.groceryList.length === 0}
-                        title="Select all items"
+                        disabled={filteredGroceries.length === 0}
+                        title="Select all visible items"
                     >
                         <MousePointerClick size={14} className="inline mr-1" />All
                     </button>
                     <button 
-                        className="bg-purple-500 text-white px-3 py-1 rounded text-sm hover:bg-purple-600"
+                        className="bg-purple-500 text-white px-3 py-1 rounded text-sm hover:bg-purple-600 disabled:opacity-50"
                         onClick={clearCompleted}
                         disabled={!state.groceryList.some(item => item.bought)}
                         title="Clear completed items"
                     >
                         <CheckCheck size={14} className="inline mr-1" />Clear
+                    </button>
+                    <button 
+                        className="bg-orange-500 text-white px-3 py-1 rounded text-sm hover:bg-orange-600 disabled:opacity-50"
+                        onClick={undoLastAction}
+                        disabled={state.undoStack.length === 0}
+                        title="Undo last action"
+                    >
+                        ↩️ Undo
                     </button>
                 </div>
                 <div className="flex flex-row justify-center items-center p-4 gap-4 w-full max-w-xl mx-auto">
