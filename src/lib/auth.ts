@@ -2,7 +2,7 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials";
 import db from "@/src/lib/db/db";
 import bcrypt from "bcryptjs";
-import { schema } from "@/src/lib/schema";
+import { signInSchema } from "@/src/lib/schema";
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [
@@ -12,7 +12,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         password: {},
       },
       async authorize(credentials) {
-        const { username, password } = schema.parse(credentials);
+        const { username, password } = signInSchema.parse(credentials);
 
         const user = await db.user.findFirst({
           where: { name: username },
@@ -33,11 +33,18 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 365 * 24 * 60 * 60, // 1 year
+    updateAge: 24 * 60 * 60, // 24 hours - refresh session every day
+  },
+  jwt: {
+    maxAge: 365 * 24 * 60 * 60, // 1 year
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id as string; 
+        token.id = user.id as string;
         token.name = user.name;
       }
       return token;

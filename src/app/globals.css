@@ -1,13 +1,10 @@
 @import "tailwindcss";
 
-@layer components {
-    input {
-      @apply border border-gray-300 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500;
-    }
-    button {
-      @apply bg-blue-400 text-white font-semibold px-4 py-2 rounded-lg shadow-md active:scale-90 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed;
-    }
-    /* icon-style {
-        @apply rounded-lg shadow-md ;
-    } */
-  }
+@theme {
+  --color-primary: #1e3a8a;
+  --color-primary-foreground: #ffffff;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+}
+
+/* Remove global button styles - use shadcn Button component instead */

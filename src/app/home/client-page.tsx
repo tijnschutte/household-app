@@ -2,12 +2,14 @@
 
 import { Grocery, Household } from "@prisma/client";
 import { useEffect, useRef, useState } from "react";
-import { Check, X, User, House, CircleSmall, ArrowLeft, Plus, Trash2, Minus, Trash, ShoppingBasket } from "lucide-react";
+import { Check, X, User, House, CircleSmall, ArrowLeft, Plus, Trash2, Minus, Trash, ShoppingBasket, Loader2 } from "lucide-react";
 import { getGroceryList } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
+import { Button } from "@/src/components/ui/button";
 import { createGroceryItem, deleteItems } from "@/src/lib/actions";
 import GroceryList from "@/src/components/house/grocery-list";
 import { SheetFooter } from "@/src/components/ui/sheet";
+import { toast } from "sonner";
 
 type HouseholdClientPageProps = {
     household: Household;
@@ -21,15 +23,16 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     const [isPending, setIsPending] = useState(false);
     const [itemName, setItemName] = useState("");
     const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
-    
+
     useEffect(() => {
         const fetchGroceries = async () => {
-            setIsLoading(true); 
+            setIsLoading(true);
             try {
                 const list: Grocery[] = await getGroceryList(household.id, userId, showPersonal);
                 setGroceryList(list);
             } catch (error) {
                 console.error("Failed to fetch groceries:", error);
+                toast.error("Failed to load your grocery list");
             } finally {
                 setIsLoading(false);
             }
@@ -40,27 +43,28 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     const removeGroceries = async () => {
         setIsPending(true);
         try {
-            const deletedItems = Array.from(selectedItems)
-            await deleteItems(deletedItems)
+            const deletedItems = Array.from(selectedItems);
+            await deleteItems(deletedItems);
             setGroceryList((prev) => prev.filter((item) => !selectedItems.has(item.id)));
             setSelectedItems(new Set());
-            console.log("Deleted items:", deletedItems);
+            toast.success(`Deleted ${deletedItems.length} item${deletedItems.length === 1 ? '' : 's'}`);
         } catch (error) {
             console.error("Error deleting items:", error);
+            toast.error("Failed to delete items");
         } finally {
-            setIsPending(false); 
+            setIsPending(false);
         }
     };
 
     const toggleSelection = (id: number) => {
         setSelectedItems((prev) => {
-            const newSelected = new Set(prev); 
+            const newSelected = new Set(prev);
             if (newSelected.has(id)) {
                 newSelected.delete(id);
             } else {
                 newSelected.add(id);
             }
-            return newSelected; 
+            return newSelected;
         });
     };
 
@@ -68,61 +72,56 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
         setIsPending(true);
         try {
             if (!itemName.trim()) {
+                toast.error("Please enter an item name");
                 return;
             }
             const newItem = await createGroceryItem(
-                itemName.toLowerCase(),
+                itemName,
                 showPersonal ? userId : undefined,
                 showPersonal ? undefined : household.id
             );
             setGroceryList([...groceryList, newItem]);
             setItemName("");
+            toast.success(`Added "${newItem.name}"`);
         } catch (error) {
             console.error("Failed to create grocery item:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to add item";
+            toast.error(errorMessage);
         } finally {
             setIsPending(false);
         }
     };
 
     return (
-        <div className="flex flex-col h-full w-full overflow-hidden">
-            {/* Top Section */}
-            <div className="sticky top-0 from-sky-950 to-sky-800 bg-gradient-to-b w-full py-4 z-20 border"> 
-                {/*    */}
-                <div className="flex flex-row justify-center items-center">
-                    <div className="absolute left-4"><ShoppingBasket color="white" /></div>
-                    <h2 className="text-2xl text-white font-semibold">
+        <div className="h-full w-full flex flex-col bg-gradient-to-br from-slate-50 to-slate-100">
+            {/* Header - Fixed at top */}
+            <header className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 w-full py-6 shadow-lg">
+                <div className="flex flex-row justify-center items-center relative px-4">
+                    <div className="absolute left-4">
+                        <ShoppingBasket className="w-6 h-6 text-white drop-shadow-md" />
+                    </div>
+                    <h2 className="text-2xl text-white font-bold tracking-wide drop-shadow-md">
                         {showPersonal ? "Persoonlijk" : household.name}
                     </h2>
                 </div>
-            </div>
+            </header>
 
-            {/* Middle Section (Takes Remaining Space) */}
-            <div className="flex flex-col flex-1 min-h-0 w-full max-w-xl p-6">
-                <GroceryList 
-                    groceryList={groceryList} 
-                    isLoading={isLoading} 
-                    selectedItems={selectedItems} 
+            {/* Main scrollable content area */}
+            <main className="flex-1 overflow-y-auto w-full max-w-2xl mx-auto px-6 pt-6 pb-6">
+                <GroceryList
+                    groceryList={groceryList}
+                    isLoading={isLoading}
+                    selectedItems={selectedItems}
                     toggleSelection={toggleSelection}
                 />
-            </div>
-        
-            {/* Bottom Section (Always at the Bottom) */}
-            <div className="sticky bottom-0 w-full bg-white shadow-inner px-4 pt-4 z-10">
-                {selectedItems.size > 0 && (
-                    <div className="flex justify-center items-center p-2">
-                        <button className="bg-red-500 text-white p-2"
-                            onClick={removeGroceries}
-                            aria-disabled={isPending}
-                            disabled={isPending}
-                        >
-                            {isPending ? <span>...</span> : <Trash2 />}
-                        </button>
-                    </div>
-                )}
-                <div className="flex flex-row justify-center items-center p-4 gap-4 w-full max-w-xl mx-auto">
-                    <Input className="bg-white"
-                        placeholder="Voeg een item toe"
+            </main>
+
+            {/* Footer - Fixed at bottom */}
+            <footer className="w-full bg-white/95 backdrop-blur-sm shadow-2xl border-t border-gray-200 px-4 pt-4 pb-6">
+                <div className="relative flex flex-row justify-center items-center gap-3 w-full max-w-2xl mx-auto px-2">
+                    <Input
+                        className="bg-white shadow-md border-2 border-gray-200 focus:border-blue-500 transition-colors h-12 text-base"
+                        placeholder="Voeg een item toe..."
                         value={itemName}
                         disabled={isPending}
                         onChange={(e) => setItemName(e.target.value)}
@@ -132,31 +131,50 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                             }
                         }}
                     />
-                    <button
+                    <Button
+                        size="icon"
                         onClick={addItem}
                         onKeyDown={(e) => {if (e.key === "Enter" && !isPending) {addItem();}}}
-                        aria-disabled={isPending}
                         disabled={isPending}
+                        className="h-12 w-12 shadow-md hover:shadow-lg transition-all"
                     >
-                        {isPending ? <span>...</span> : <span><Plus /></span>}
-                    </button>
+                        {isPending ? <Loader2 className="animate-spin" /> : <Plus />}
+                    </Button>
+
+                    {/* Delete button positioned to the right of add button */}
+                    {selectedItems.size > 0 && (
+                        <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={removeGroceries}
+                            disabled={isPending}
+                            className="h-12 w-12 shadow-lg hover:shadow-xl transition-all animate-in fade-in zoom-in duration-200"
+                        >
+                            {isPending ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                        </Button>
+                    )}
                 </div>
-                <div className="relative flex flex-row justify-center gap-4 p-4">
-                    {/* <SignOut /> */}
-                    <button
-                        className={`px-4 py-2 rounded text-black ${!showPersonal ? "bg-green-300" : "bg-gray-200"}`}
+                <div className="relative flex flex-row justify-center gap-3 pt-4 pb-2">
+                    <Button
+                        variant={!showPersonal ? "default" : "outline"}
+                        size="lg"
                         onClick={() => setShowPersonal(false)}
+                        className="min-w-[120px] shadow-md hover:shadow-lg transition-all gap-2"
                     >
-                        <House />
-                    </button>
-                    <button
-                        className={`px-4 py-2 rounded text-black ${showPersonal ? "bg-green-300" : "bg-gray-200"}`}
+                        <House className="w-4 h-4" />
+                        Huishouden
+                    </Button>
+                    <Button
+                        variant={showPersonal ? "default" : "outline"}
+                        size="lg"
                         onClick={() => setShowPersonal(true)}
+                        className="min-w-[120px] shadow-md hover:shadow-lg transition-all gap-2"
                     >
-                        <User />
-                    </button>
+                        <User className="w-4 h-4" />
+                        Persoonlijk
+                    </Button>
                 </div>
-            </div>
+            </footer>
         </div>
     );
 }

@@ -1,7 +1,7 @@
 'use server';
 
 import prisma from '@/src/lib/db/db';
-import { schema } from "@/src/lib/schema";
+import { schema, groceryItemSchema } from "@/src/lib/schema";
 import db from "@/src/lib/db/db";
 import { executeAction } from "@/src/lib/executeAction";
 import bcrypt from 'bcryptjs';
@@ -58,27 +58,40 @@ export const getAllHouseholds = async () => {
 
 export async function createGroceryItem(name: string, userId: number | undefined, householdId: number | undefined) {
   try {
+    // Validate item name
+    const validated = groceryItemSchema.parse({ name });
+    const itemName = validated.name.trim().toLowerCase();
+
+    // Build proper where clause - check duplicates in the correct context
+    const whereClause = householdId
+      ? { name: itemName, householdId: householdId }
+      : { name: itemName, userId: userId, householdId: null };
+
     const storedItem = await prisma.grocery.findFirst({
-      where: {
-        name: name.toLowerCase(),
-        userId: userId,
-        householdId: householdId,
-      },
+      where: whereClause,
     });
+
     if (storedItem) {
-      throw new Error('Item already in db.');
+      throw new Error(`"${name}" is already in your list`);
     }
+
     const groceryItem = await prisma.grocery.create({
       data : {
-        name : name.toLowerCase(),
+        name : itemName,
         userId : userId,
         householdId : householdId,
       },
     });
     return groceryItem;
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new Error(error.errors[0].message);
+    }
+    if (error instanceof Error) {
+      throw error;
+    }
     console.error('Failed to create grocery:', error);
-    throw new Error('Failed to create grocery.');
+    throw new Error('Failed to add item to list');
   }
 }
 
