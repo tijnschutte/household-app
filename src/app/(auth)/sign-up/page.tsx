@@ -1,53 +1,88 @@
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { Label } from "@/src/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/src/components/ui/card";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/src/lib/auth";
+import { auth, signIn } from "@/src/lib/auth";
 import { signUp } from "@/src/lib/actions";
+import { executeAction } from "@/src/lib/executeAction";
 
 const Page = async () => {
   const session = await auth();
   if (session) redirect("/");
 
   return (
-    <div className="flex flex-col w-full h-full justify-center items-center space-y-6 px-10">
-      <h1 className="text-2xl font-bold text-center mb-6">Create Account</h1>
-
-      {/* Email/Password Sign Up */}
-      <form
-        className="space-y-4"
-        action={async (formData) => {
-          "use server";
-          const res = await signUp(formData);
-          if (res.success) {
-            redirect("/sign-in");
-          }
-        }}
-      >
-        <Input
-          name="username"
-          placeholder="Username"
-          type="text"
-          required
-          autoComplete="username"
-        />
-        <Input
-          name="password"
-          placeholder="Password"
-          type="password"
-          required
-          autoComplete="new-password"
-        />
-        <Button className="w-full" type="submit">
-          Sign Up
-        </Button>
-      </form>
-
-      <div className="text-center">
-        <Button asChild variant="link">
-          <Link href="/sign-in">Already have an account? Sign in</Link>
-        </Button>
-      </div>
+    <div className="flex min-h-screen w-full items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
+          <CardDescription>
+            Enter your details below to create your account
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="space-y-4"
+            action={async (formData) => {
+              "use server";
+              const res = await signUp(formData);
+              if (res.success) {
+                // Auto-login after successful sign-up
+                await executeAction({
+                  actionFn: async () => {
+                    await signIn("credentials", formData);
+                  },
+                });
+              }
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                name="username"
+                placeholder="Enter your username"
+                type="text"
+                required
+                autoComplete="username"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                name="password"
+                placeholder="Create a password"
+                type="password"
+                required
+                autoComplete="new-password"
+              />
+            </div>
+            <Button className="w-full" type="submit">
+              Sign Up
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex flex-col space-y-2">
+          <div className="text-sm text-muted-foreground text-center">
+            Already have an account?{" "}
+            <Link
+              href="/sign-in"
+              className="font-medium text-primary hover:underline"
+            >
+              Sign in
+            </Link>
+          </div>
+        </CardFooter>
+      </Card>
     </div>
   );
 };

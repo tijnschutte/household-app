@@ -21,9 +21,11 @@ const executeAction = async <T>({
       throw error;
     }
 
+    console.error("executeAction error:", error);
+
     return {
       success: false,
-      message: "An error has occurred during executing the action",
+      message: error instanceof Error ? error.message : "An error has occurred during executing the action",
     };
   }
 };

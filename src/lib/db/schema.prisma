@@ -18,7 +18,8 @@ model User {
 
 model Household {
   id      Int       @id @default(autoincrement())
-  name    String
+  name    String    @unique
+  secret  String?   @unique
   members User[]
   Grocery Grocery[]
 }

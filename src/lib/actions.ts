@@ -119,3 +119,95 @@ export async function deleteItems(ids: number[]) {
     throw new Error('Failed to delete grocery.');
   }
 }
+
+export const createHousehold = async (formData: FormData) => {
+  return executeAction({
+    actionFn: async () => {
+      const name = formData.get("name") as string;
+      const userId = formData.get("userId") as string;
+
+      console.log("Creating household:", { name, userId });
+
+      if (!name || !userId) {
+        throw new Error("Name and user ID are required");
+      }
+
+      const trimmedName = name.trim();
+
+      // Check if household name already exists
+      const existingHousehold = await db.household.findUnique({
+        where: { name: trimmedName }
+      });
+
+      if (existingHousehold) {
+        throw new Error("A household with this name already exists. Please choose a different name.");
+      }
+
+      // Generate a random secret for the household using crypto
+      const randomString = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const shortSecret = randomString.slice(0, 12).toUpperCase();
+
+      console.log("Generated secret:", shortSecret);
+
+      const household = await db.household.create({
+        data: {
+          name: trimmedName,
+          secret: shortSecret,
+          members: {
+            connect: { id: parseInt(userId) }
+          }
+        },
+      });
+
+      console.log("Household created:", household);
+
+      return household;
+    },
+    successMessage: "Household created successfully",
+  });
+};
+
+export const joinHousehold = async (formData: FormData) => {
+  return executeAction({
+    actionFn: async () => {
+      const secret = formData.get("secret") as string;
+      const userId = formData.get("userId") as string;
+
+      if (!secret || !userId) {
+        throw new Error("Secret and user ID are required");
+      }
+
+      const household = await db.household.findUnique({
+        where: { secret: secret.trim().toUpperCase() }
+      });
+
+      if (!household) {
+        throw new Error("Invalid household secret");
+      }
+
+      await db.user.update({
+        where: { id: parseInt(userId) },
+        data: { householdId: household.id }
+      });
+
+      return household;
+    },
+    successMessage: "Joined household successfully",
+  });
+};
+
+export const leaveHousehold = async (userId: number) => {
+  return executeAction({
+    actionFn: async () => {
+      if (!userId) {
+        throw new Error("User ID is required");
+      }
+
+      await db.user.update({
+        where: { id: userId },
+        data: { householdId: null }
+      });
+    },
+    successMessage: "Left household successfully",
+  });
+};

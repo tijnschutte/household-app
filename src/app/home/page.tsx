@@ -15,12 +15,12 @@ export default async function Page() {
     const householdId = await getHouseholdById(Number(session.user?.id));
     console.log("householdId:", householdId);
     if (!householdId) {
-        redirect("/");
+        redirect("/household-setup");
     }
 
-    return <HouseholdClientPage 
-                household={householdId} 
-                userId={Number(session.user?.id)} 
+    return <HouseholdClientPage
+                household={householdId}
+                userId={Number(session.user?.id)}
             />;
 }
 

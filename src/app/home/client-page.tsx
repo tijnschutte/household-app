@@ -2,7 +2,7 @@
 
 import { Grocery, Household } from "@prisma/client";
 import { useEffect, useRef, useState } from "react";
-import { Check, X, User, House, CircleSmall, ArrowLeft, Plus, Trash2, Minus, Trash, ShoppingBasket, Loader2 } from "lucide-react";
+import { Check, X, User, House, CircleSmall, ArrowLeft, Plus, Trash2, Minus, Trash, ShoppingBasket, Loader2, Info, LogOut } from "lucide-react";
 import { getGroceryList } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
@@ -10,6 +10,8 @@ import { createGroceryItem, deleteItems } from "@/src/lib/actions";
 import GroceryList from "@/src/components/house/grocery-list";
 import { SheetFooter } from "@/src/components/ui/sheet";
 import { toast } from "sonner";
+import Link from "next/link";
+import { signOut } from "next-auth/react";
 
 type HouseholdClientPageProps = {
     household: Household;
@@ -98,11 +100,25 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
             <header className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 w-full py-6 shadow-lg">
                 <div className="flex flex-row justify-center items-center relative px-4">
                     <div className="absolute left-4">
-                        <ShoppingBasket className="w-6 h-6 text-white drop-shadow-md" />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => signOut()}
+                            className="text-white hover:bg-white/20"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </Button>
                     </div>
                     <h2 className="text-2xl text-white font-bold tracking-wide drop-shadow-md">
                         {showPersonal ? "Persoonlijk" : household.name}
                     </h2>
+                    <div className="absolute right-4">
+                        <Button variant="ghost" size="icon" asChild className="text-white hover:bg-white/20">
+                            <Link href="/household-info">
+                                <Info className="w-5 h-5" />
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
             </header>
 
