@@ -44,7 +44,7 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
     if (household.secret) {
       await navigator.clipboard.writeText(household.secret);
       setCopied(true);
-      toast.success("Secret copied to clipboard");
+      toast.success("Code gekopieerd");
       setTimeout(() => setCopied(false), 2000);
     }
   };
@@ -62,7 +62,7 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
       }
     } catch (error) {
       console.error("Error leaving household:", error);
-      toast.error("Failed to leave household");
+      toast.error("Verlaten huishouden mislukt");
     } finally {
       setIsLeaving(false);
     }
@@ -73,12 +73,12 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
       <CardHeader>
         <CardTitle>{household.name}</CardTitle>
         <CardDescription>
-          Share the secret code below to invite others to your household
+          Deel de code hieronder om anderen uit te nodigen voor je huishouden
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="secret">Household Secret</Label>
+          <Label htmlFor="secret">Huishoudcode</Label>
           <div className="flex gap-2">
             <Input
               id="secret"
@@ -100,7 +100,7 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Anyone with this code can join your household
+            Iedereen met deze code kan deelnemen aan je huishouden
           </p>
         </div>
       </CardContent>
@@ -110,20 +110,20 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
           <AlertDialogTrigger asChild>
             <Button variant="destructive" className="w-full" disabled={isLeaving}>
               <LogOut className="mr-2 h-4 w-4" />
-              Leave Household
+              Huishouden verlaten
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogTitle>Weet je het zeker?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will remove you from "{household.name}". You can rejoin later using the household secret code.
+                Dit verwijdert je uit "{household.name}". Je kunt later opnieuw deelnemen met de huishoudcode.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>Annuleren</AlertDialogCancel>
               <AlertDialogAction onClick={handleLeaveHousehold} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Leave Household
+                Huishouden verlaten
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

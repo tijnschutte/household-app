@@ -32,17 +32,31 @@ export async function getGroceryList(householdId: number, userId: number, showPe
 
         if (showPersonal) {
             groceryList = await prisma.grocery.findMany({
-                where: { 
+                where: {
                     userId: userId,
                     bought: false,
                 },
+                include: {
+                    category: true,
+                },
+                orderBy: [
+                    { categoryId: 'asc' }, // null values (uncategorized) come first
+                    { name: 'asc' },
+                ],
             });
         } else {
             groceryList = await prisma.grocery.findMany({
-                where: { 
+                where: {
                     householdId: householdId,
                     bought: false
                 },
+                include: {
+                    category: true,
+                },
+                orderBy: [
+                    { categoryId: 'asc' }, // null values (uncategorized) come first
+                    { name: 'asc' },
+                ],
             });
         }
 
@@ -51,5 +65,33 @@ export async function getGroceryList(householdId: number, userId: number, showPe
     } catch (error) {
         console.error('Failed to fetch grocery list:', error);
         throw new Error('Failed to fetch grocery list.');
+    }
+}
+
+export async function getCategories(householdId: number, userId: number, showPersonal: boolean) {
+    try {
+        let categories;
+
+        if (showPersonal) {
+            categories = await prisma.category.findMany({
+                where: {
+                    userId: userId,
+                },
+                orderBy: { name: 'asc' },
+            });
+        } else {
+            categories = await prisma.category.findMany({
+                where: {
+                    householdId: householdId,
+                },
+                orderBy: { name: 'asc' },
+            });
+        }
+
+        return categories;
+
+    } catch (error) {
+        console.error('Failed to fetch categories:', error);
+        throw new Error('Failed to fetch categories.');
     }
 }

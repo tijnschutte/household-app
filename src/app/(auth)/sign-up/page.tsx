@@ -23,9 +23,9 @@ const Page = async () => {
     <div className="flex min-h-screen w-full items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
+          <CardTitle className="text-2xl font-bold">Account aanmaken</CardTitle>
           <CardDescription>
-            Enter your details below to create your account
+            Voer je gegevens in om een account aan te maken
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -45,40 +45,40 @@ const Page = async () => {
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">Gebruikersnaam</Label>
               <Input
                 id="username"
                 name="username"
-                placeholder="Enter your username"
+                placeholder="Voer je gebruikersnaam in"
                 type="text"
                 required
                 autoComplete="username"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Wachtwoord</Label>
               <Input
                 id="password"
                 name="password"
-                placeholder="Create a password"
+                placeholder="Maak een wachtwoord aan"
                 type="password"
                 required
                 autoComplete="new-password"
               />
             </div>
             <Button className="w-full" type="submit">
-              Sign Up
+              Registreren
             </Button>
           </form>
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">
           <div className="text-sm text-muted-foreground text-center">
-            Already have an account?{" "}
+            Al een account?{" "}
             <Link
               href="/sign-in"
               className="font-medium text-primary hover:underline"
             >
-              Sign in
+              Inloggen
             </Link>
           </div>
         </CardFooter>

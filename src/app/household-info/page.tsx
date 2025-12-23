@@ -25,7 +25,7 @@ export default async function HouseholdInfoPage() {
         <Button variant="ghost" asChild>
           <Link href="/home">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Home
+            Terug naar home
           </Link>
         </Button>
         <HouseholdInfo household={household} userId={Number(session.user.id)} />

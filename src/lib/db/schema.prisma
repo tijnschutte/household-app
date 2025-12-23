@@ -14,14 +14,29 @@ model User {
   householdId Int?
   household   Household? @relation(fields: [householdId], references: [id])
   groceries   Grocery[]
+  categories  Category[]
 }
 
 model Household {
-  id      Int       @id @default(autoincrement())
-  name    String    @unique
-  secret  String?   @unique
-  members User[]
-  Grocery Grocery[]
+  id         Int        @id @default(autoincrement())
+  name       String     @unique
+  secret     String?    @unique
+  members    User[]
+  Grocery    Grocery[]
+  categories Category[]
+}
+
+model Category {
+  id          Int        @id @default(autoincrement())
+  name        String
+  household   Household? @relation(fields: [householdId], references: [id])
+  householdId Int?
+  User        User?      @relation(fields: [userId], references: [id])
+  userId      Int?
+  groceries   Grocery[]
+
+  @@unique([name, householdId])
+  @@unique([name, userId])
 }
 
 model Grocery {
@@ -33,6 +48,8 @@ model Grocery {
   householdId Int?
   User        User?      @relation(fields: [userId], references: [id])
   userId      Int?
+  category    Category?  @relation(fields: [categoryId], references: [id])
+  categoryId  Int?
 
   @@unique([name, householdId])
   @@unique([name, userId])

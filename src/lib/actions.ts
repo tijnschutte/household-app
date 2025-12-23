@@ -21,7 +21,7 @@ export const signUp = async (formData: FormData) => {
         },
       });
     },
-    successMessage: "Signed up successfully",
+    successMessage: "Account succesvol aangemaakt",
   });
 };
 
@@ -72,7 +72,7 @@ export async function createGroceryItem(name: string, userId: number | undefined
     });
 
     if (storedItem) {
-      throw new Error(`"${name}" is already in your list`);
+      throw new Error(`"${name}" staat al in je lijst`);
     }
 
     const groceryItem = await prisma.grocery.create({
@@ -91,7 +91,7 @@ export async function createGroceryItem(name: string, userId: number | undefined
       throw error;
     }
     console.error('Failed to create grocery:', error);
-    throw new Error('Failed to add item to list');
+    throw new Error('Toevoegen aan lijst mislukt');
   }
 }
 
@@ -103,7 +103,7 @@ export async function buyGroceryItem(id: number) {
     });
   } catch (error) {
     console.error('Failed to buy grocery:', error);
-    throw new Error('Failed to buy grocery.');
+    throw new Error('Kopen mislukt');
   }
 }
 
@@ -116,7 +116,7 @@ export async function deleteItems(ids: number[]) {
   });
   } catch (error) {
     console.error('Failed to delete grocery:', error);
-    throw new Error('Failed to delete grocery.');
+    throw new Error('Verwijderen mislukt');
   }
 }
 
@@ -129,7 +129,7 @@ export const createHousehold = async (formData: FormData) => {
       console.log("Creating household:", { name, userId });
 
       if (!name || !userId) {
-        throw new Error("Name and user ID are required");
+        throw new Error("Naam en gebruikers-ID zijn vereist");
       }
 
       const trimmedName = name.trim();
@@ -140,7 +140,7 @@ export const createHousehold = async (formData: FormData) => {
       });
 
       if (existingHousehold) {
-        throw new Error("A household with this name already exists. Please choose a different name.");
+        throw new Error("Een huishouden met deze naam bestaat al. Kies een andere naam.");
       }
 
       // Generate a random secret for the household using crypto
@@ -163,7 +163,7 @@ export const createHousehold = async (formData: FormData) => {
 
       return household;
     },
-    successMessage: "Household created successfully",
+    successMessage: "Huishouden succesvol aangemaakt",
   });
 };
 
@@ -174,7 +174,7 @@ export const joinHousehold = async (formData: FormData) => {
       const userId = formData.get("userId") as string;
 
       if (!secret || !userId) {
-        throw new Error("Secret and user ID are required");
+        throw new Error("Code en gebruikers-ID zijn vereist");
       }
 
       const household = await db.household.findUnique({
@@ -182,7 +182,7 @@ export const joinHousehold = async (formData: FormData) => {
       });
 
       if (!household) {
-        throw new Error("Invalid household secret");
+        throw new Error("Ongeldige huishoudcode");
       }
 
       await db.user.update({
@@ -192,7 +192,7 @@ export const joinHousehold = async (formData: FormData) => {
 
       return household;
     },
-    successMessage: "Joined household successfully",
+    successMessage: "Succesvol deelgenomen aan huishouden",
   });
 };
 
@@ -200,7 +200,7 @@ export const leaveHousehold = async (userId: number) => {
   return executeAction({
     actionFn: async () => {
       if (!userId) {
-        throw new Error("User ID is required");
+        throw new Error("Gebruikers-ID is vereist");
       }
 
       await db.user.update({
@@ -208,6 +208,75 @@ export const leaveHousehold = async (userId: number) => {
         data: { householdId: null }
       });
     },
-    successMessage: "Left household successfully",
+    successMessage: "Huishouden succesvol verlaten",
   });
 };
+
+export async function createCategory(name: string, userId: number | undefined, householdId: number | undefined) {
+  try {
+    if (!name) {
+      throw new Error("Categorienaam is vereist");
+    }
+
+    const trimmedName = name.trim();
+
+    // Check for duplicate category name in the same context
+    const whereClause = householdId
+      ? { name: trimmedName, householdId: householdId }
+      : { name: trimmedName, userId: userId, householdId: null };
+
+    const existingCategory = await prisma.category.findFirst({
+      where: whereClause,
+    });
+
+    if (existingCategory) {
+      throw new Error(`Categorie "${name}" bestaat al`);
+    }
+
+    const category = await prisma.category.create({
+      data: {
+        name: trimmedName,
+        userId: userId,
+        householdId: householdId,
+      },
+    });
+
+    return category;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    console.error('Failed to create category:', error);
+    throw new Error('Aanmaken categorie mislukt');
+  }
+}
+
+export async function deleteCategory(id: number) {
+  try {
+    // First, unassign all groceries from this category
+    await prisma.grocery.updateMany({
+      where: { categoryId: id },
+      data: { categoryId: null },
+    });
+
+    // Then delete the category
+    await prisma.category.delete({
+      where: { id: id },
+    });
+  } catch (error) {
+    console.error('Failed to delete category:', error);
+    throw new Error('Verwijderen categorie mislukt');
+  }
+}
+
+export async function updateGroceryCategory(groceryId: number, categoryId: number | null) {
+  try {
+    await prisma.grocery.update({
+      where: { id: groceryId },
+      data: { categoryId: categoryId },
+    });
+  } catch (error) {
+    console.error('Failed to update grocery category:', error);
+    throw new Error('Bijwerken categorie mislukt');
+  }
+}
