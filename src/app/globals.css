@@ -7,4 +7,15 @@
   --color-destructive-foreground: #ffffff;
 }
 
+/* Make app feel native - disable overscroll bounce effect */
+html, body {
+  overscroll-behavior: none;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  position: fixed;
+  touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Remove global button styles - use shadcn Button component instead */

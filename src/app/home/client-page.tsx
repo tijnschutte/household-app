@@ -6,7 +6,7 @@ import { User, House, Plus, Trash2, ShoppingBasket, Loader2, Info, LogOut } from
 import { getGroceryList, getCategories } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
-import { createGroceryItem, deleteItems, updateGroceryCategory, deleteCategory } from "@/src/lib/actions";
+import { createGroceryItem, deleteItems, updateGroceryCategory, deleteCategory, updateGroceryName } from "@/src/lib/actions";
 import GroceryList from "@/src/components/house/grocery-list";
 import AddCategory from "@/src/components/add-category";
 import { toast } from "sonner";
@@ -82,8 +82,14 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     const addItem = async () => {
         setIsPending(true);
         try {
-            if (!itemName.trim()) {
+            const trimmedName = itemName.trim();
+            if (!trimmedName) {
                 toast.error("Voer een itemnaam in");
+                inputRef.current?.focus();
+                return;
+            }
+            if (trimmedName.length > 30) {
+                toast.error("Itemnaam mag maximaal 30 karakters zijn");
                 inputRef.current?.focus();
                 return;
             }
@@ -96,7 +102,8 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
             setItemName("");
             toast.success(`"${newItem.name}" toegevoegd`);
             // Re-focus input for quick consecutive additions
-            inputRef.current?.focus();
+            // Use setTimeout to ensure focus happens after state updates
+            setTimeout(() => inputRef.current?.focus(), 0);
         } catch (error) {
             console.error("Failed to create grocery item:", error);
             const errorMessage = error instanceof Error ? error.message : "Toevoegen mislukt";
@@ -107,26 +114,41 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     };
 
     const handleDragEnd = async (groceryId: number, categoryId: number | null) => {
+        // Find the current item to check if category actually changed
+        const currentItem = groceryList.find(item => item.id === groceryId);
+        if (!currentItem) return;
+
+        // Check if category actually changed
+        const categoryChanged = currentItem.categoryId !== categoryId;
+        if (!categoryChanged) return; // Don't update or show toast if nothing changed
+
+        // Store previous state for rollback
+        const previousCategoryId = currentItem.categoryId;
+        const previousCategory = currentItem.category;
+
+        // Optimistic update - update local state immediately
+        const targetCategory = categories.find(c => c.id === categoryId) || null;
+        setGroceryList((prev) =>
+            prev.map((item) =>
+                item.id === groceryId
+                    ? { ...item, categoryId, category: targetCategory }
+                    : item
+            )
+        );
+
         try {
-            // Find the current item to check if category actually changed
-            const currentItem = groceryList.find(item => item.id === groceryId);
-            if (!currentItem) return;
-
-            // Check if category actually changed
-            const categoryChanged = currentItem.categoryId !== categoryId;
-            if (!categoryChanged) return; // Don't update or show toast if nothing changed
-
             await updateGroceryCategory(groceryId, categoryId);
-            // Update local state
+            const categoryName = targetCategory ? targetCategory.name : "Ongecategoriseerd";
+            toast.success(`Item verplaatst naar ${categoryName}`);
+        } catch (error) {
+            // Revert on error
             setGroceryList((prev) =>
                 prev.map((item) =>
                     item.id === groceryId
-                        ? { ...item, categoryId, category: categories.find(c => c.id === categoryId) || null }
+                        ? { ...item, categoryId: previousCategoryId, category: previousCategory }
                         : item
                 )
             );
-            toast.success("Item verplaatst");
-        } catch (error) {
             console.error("Failed to update category:", error);
             toast.error("Verplaatsen mislukt");
         }
@@ -145,6 +167,21 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
         } catch (error) {
             console.error("Failed to delete category:", error);
             toast.error("Verwijderen categorie mislukt");
+        }
+    };
+
+    const handleRenameItem = async (groceryId: number, newName: string) => {
+        try {
+            await updateGroceryName(groceryId, newName);
+            setGroceryList((prev) =>
+                prev.map((item) =>
+                    item.id === groceryId ? { ...item, name: newName } : item
+                )
+            );
+            toast.success("Item hernoemd");
+        } catch (error) {
+            console.error("Failed to rename item:", error);
+            toast.error("Hernoemen mislukt");
         }
     };
 
@@ -178,25 +215,24 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
 
             {/* Main scrollable content area */}
             <main className="flex-1 overflow-y-auto w-full max-w-2xl mx-auto px-6 pt-6 pb-6">
-                {showPersonal && (
-                    <div className="mb-4 flex justify-end">
-                        <AddCategory
-                            userId={userId}
-                            householdId={showPersonal ? undefined : household.id}
-                            showPersonal={showPersonal}
-                            onCategoryAdded={fetchData}
-                        />
-                    </div>
-                )}
+                <div className="mb-4 flex justify-end">
+                    <AddCategory
+                        userId={userId}
+                        householdId={showPersonal ? undefined : household.id}
+                        showPersonal={showPersonal}
+                        onCategoryAdded={fetchData}
+                    />
+                </div>
                 <GroceryList
                     groceryList={groceryList}
-                    categories={showPersonal ? categories : []}
+                    categories={categories}
                     isLoading={isLoading}
                     selectedItems={selectedItems}
                     toggleSelection={toggleSelection}
                     onDragEnd={handleDragEnd}
                     onDeleteCategory={handleDeleteCategory}
-                    showCategories={showPersonal}
+                    onRenameItem={handleRenameItem}
+                    showCategories={true}
                 />
             </main>
 
@@ -205,21 +241,29 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                 <div className="relative flex flex-row justify-center items-center gap-3 w-full max-w-2xl mx-auto px-2">
                     <Input
                         ref={inputRef}
-                        className="bg-white shadow-md border-2 border-gray-200 focus:border-blue-500 transition-colors h-12 text-base"
+                        className={`bg-white shadow-md border-2 border-gray-200 focus:border-blue-500 transition-colors h-12 text-base ${isPending ? "opacity-70" : ""}`}
                         placeholder="Voeg een item toe..."
                         value={itemName}
-                        disabled={isPending}
+                        readOnly={isPending}
+                        maxLength={30}
                         onChange={(e) => setItemName(e.target.value)}
                         onKeyDown={(e) => {
                             if (e.key === "Enter" && !isPending) {
+                                e.preventDefault();
                                 addItem();
                             }
                         }}
                     />
                     <Button
                         size="icon"
-                        onClick={addItem}
-                        onKeyDown={(e) => {if (e.key === "Enter" && !isPending) {addItem();}}}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            if (!isPending) addItem();
+                        }}
+                        onTouchEnd={(e) => {
+                            e.preventDefault();
+                            if (!isPending) addItem();
+                        }}
                         disabled={isPending}
                         className="h-12 w-12 shadow-md hover:shadow-lg active:scale-95 transition-all"
                     >

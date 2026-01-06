@@ -1,8 +1,9 @@
 "use client";
 
 import { Grocery, Category } from "@prisma/client";
-import { Check, ShoppingCart, Trash2 } from "lucide-react";
+import { ShoppingCart, Trash2, Pencil, GripVertical } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Input } from "../ui/input";
 import {
   DndContext,
   DragEndEvent,
@@ -28,6 +29,7 @@ type GroceryListProps = {
   toggleSelection: (id: number) => void;
   onDragEnd: (groceryId: number, categoryId: number | null) => void;
   onDeleteCategory: (categoryId: number) => void;
+  onRenameItem: (groceryId: number, newName: string) => void;
   showCategories?: boolean;
 };
 
@@ -35,33 +37,82 @@ function DraggableGroceryItem({
   item,
   isSelected,
   onClick,
+  onRename,
 }: {
   item: GroceryWithCategory;
   isSelected: boolean;
   onClick: () => void;
+  onRename: (newName: string) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(item.name);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.id,
   });
 
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleSave = () => {
+    const trimmed = editValue.trim().slice(0, 30);
+    if (trimmed && trimmed !== item.name) {
+      onRename(trimmed);
+    } else {
+      setEditValue(item.name);
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSave();
+    } else if (e.key === "Escape") {
+      setEditValue(item.name);
+      setIsEditing(false);
+    }
+  };
+
   const style = transform
     ? {
         transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        touchAction: 'none',
       }
-    : {
-        touchAction: 'none',
-      };
+    : undefined;
+
+  if (isEditing) {
+    return (
+      <div
+        className="flex items-center space-x-2 p-2.5 rounded-lg bg-white border-2 border-blue-400 shadow-md"
+      >
+        <div className="w-5 h-5 flex-shrink-0" />
+        <Input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          maxLength={30}
+          className="h-7 text-base border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
       ref={setNodeRef}
-      style={{ ...style, touchAction: 'none', userSelect: 'none' }}
-      {...listeners}
-      {...attributes}
+      style={style}
       onClick={onClick}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setIsEditing(true);
+      }}
       className={`
-        flex items-center space-x-3 p-4 rounded-xl cursor-pointer
+        flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer group select-none
         ${
           isSelected
             ? "bg-green-50 border-2 border-green-300 shadow-sm scale-[0.98]"
@@ -71,25 +122,30 @@ function DraggableGroceryItem({
       `}
     >
       <div
-        className={`
-          w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-colors
-          ${
-            isSelected
-              ? "bg-green-500 border-green-600"
-              : "border-gray-300 bg-gray-50"
-          }
-        `}
+        {...listeners}
+        {...attributes}
+        className="touch-none cursor-grab active:cursor-grabbing p-1 -ml-1 text-gray-400 hover:text-gray-600"
+        onClick={(e) => e.stopPropagation()}
       >
-        {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+        <GripVertical className="w-4 h-4" />
       </div>
       <span
         className={`
-          truncate w-full text-lg min-w-0 first-letter:uppercase transition-all duration-100
+          truncate w-full text-base min-w-0 first-letter:uppercase transition-all duration-100
           ${isSelected ? "text-gray-500 line-through" : "text-gray-800 font-medium"}
         `}
       >
         {item.name}
       </span>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsEditing(true);
+        }}
+        className="p-1 hover:bg-gray-100 rounded"
+      >
+        <Pencil className="w-3.5 h-3.5 text-gray-400" />
+      </button>
     </div>
   );
 }
@@ -98,15 +154,17 @@ function UncategorizedItems({
   items,
   selectedItems,
   toggleSelection,
+  onRenameItem,
 }: {
   items: GroceryWithCategory[];
   selectedItems: Set<number>;
   toggleSelection: (id: number) => void;
+  onRenameItem: (groceryId: number, newName: string) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: "uncategorized" });
 
   return (
-    <div ref={setNodeRef} className="space-y-3 min-h-[60px] p-4 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30">
+    <div ref={setNodeRef} className="space-y-2 min-h-[60px] p-3 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30">
       {items.length === 0 ? (
         <p className="text-sm text-gray-400 italic text-center py-2">
           Sleep items hierheen om uit categorie te halen
@@ -118,6 +176,7 @@ function UncategorizedItems({
             item={item}
             isSelected={selectedItems.has(item.id)}
             onClick={() => toggleSelection(item.id)}
+            onRename={(newName) => onRenameItem(item.id, newName)}
           />
         ))
       )}
@@ -132,6 +191,7 @@ function DroppableCategory({
   selectedItems,
   toggleSelection,
   onDelete,
+  onRenameItem,
   isUncategorized = false,
 }: {
   id: string;
@@ -140,6 +200,7 @@ function DroppableCategory({
   selectedItems: Set<number>;
   toggleSelection: (id: number) => void;
   onDelete?: () => void;
+  onRenameItem: (groceryId: number, newName: string) => void;
   isUncategorized?: boolean;
 }) {
   const { setNodeRef } = useDroppable({ id });
@@ -147,7 +208,7 @@ function DroppableCategory({
   return (
     <div
       ref={setNodeRef}
-      className={`space-y-3 p-4 rounded-lg ${
+      className={`space-y-2 p-3 rounded-lg ${
         isUncategorized
           ? "bg-gray-50/50"
           : "bg-blue-50/30 border border-blue-100"
@@ -172,7 +233,7 @@ function DroppableCategory({
           </Button>
         )}
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {items.length === 0 ? (
           <p className="text-sm text-gray-400 italic px-2 py-4 text-center">
             Sleep items hierheen
@@ -184,6 +245,7 @@ function DroppableCategory({
               item={item}
               isSelected={selectedItems.has(item.id)}
               onClick={() => toggleSelection(item.id)}
+              onRename={(newName) => onRenameItem(item.id, newName)}
             />
           ))
         )}
@@ -200,6 +262,7 @@ export default function GroceryList({
   toggleSelection,
   onDragEnd,
   onDeleteCategory,
+  onRenameItem,
   showCategories = true,
 }: GroceryListProps) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -213,12 +276,13 @@ export default function GroceryList({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5,
+        distance: 8,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        distance: 5,
+        delay: 250,
+        tolerance: 8,
       },
     })
   );
@@ -242,11 +306,20 @@ export default function GroceryList({
     const groceryId = active.id as number;
     let categoryId: number | null = null;
 
-    if (over.id !== "uncategorized") {
-      // Extract category ID from the droppable ID
-      const overId = over.id.toString();
-      if (overId.startsWith("category-")) {
-        categoryId = parseInt(overId.replace("category-", ""));
+    const overId = over.id.toString();
+
+    if (overId === "uncategorized") {
+      // Dropped on uncategorized zone
+      categoryId = null;
+    } else if (overId.startsWith("category-")) {
+      // Dropped on a category container
+      categoryId = parseInt(overId.replace("category-", ""));
+    } else {
+      // Dropped on another grocery item - find its category
+      const targetItemId = parseInt(overId);
+      const targetItem = groceryList.find((item) => item.id === targetItemId);
+      if (targetItem) {
+        categoryId = targetItem.categoryId;
       }
     }
 
@@ -302,6 +375,7 @@ export default function GroceryList({
               selectedItems={selectedItems}
               toggleSelection={toggleSelection}
               onDelete={() => onDeleteCategory(category.id)}
+              onRenameItem={onRenameItem}
             />
           ))}
 
@@ -311,18 +385,20 @@ export default function GroceryList({
               items={uncategorizedItems}
               selectedItems={selectedItems}
               toggleSelection={toggleSelection}
+              onRenameItem={onRenameItem}
             />
           )}
 
           {/* Simple list when categories are disabled */}
           {!showCategories && uncategorizedItems.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {uncategorizedItems.map((item) => (
                 <DraggableGroceryItem
                   key={item.id}
                   item={item}
                   isSelected={selectedItems.has(item.id)}
                   onClick={() => toggleSelection(item.id)}
+                  onRename={(newName) => onRenameItem(item.id, newName)}
                 />
               ))}
             </div>
@@ -344,13 +420,17 @@ export default function GroceryList({
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      autoScroll={{
+        threshold: { x: 0, y: 0.2 },
+        acceleration: 15,
+      }}
     >
       {renderContent()}
 
       <DragOverlay>
         {activeItem ? (
-          <div className="bg-white border-2 border-blue-500 shadow-2xl p-4 rounded-xl opacity-90">
-            <span className="text-lg font-medium first-letter:uppercase">
+          <div className="bg-white border-2 border-blue-500 shadow-2xl p-2.5 rounded-lg opacity-90">
+            <span className="text-base font-medium first-letter:uppercase">
               {activeItem.name}
             </span>
           </div>

@@ -1,6 +1,3 @@
-import { Button } from "@/src/components/ui/button";
-import { Input } from "@/src/components/ui/input";
-import { Label } from "@/src/components/ui/label";
 import {
   Card,
   CardContent,
@@ -11,9 +8,8 @@ import {
 } from "@/src/components/ui/card";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { auth, signIn } from "@/src/lib/auth";
-import { signUp } from "@/src/lib/actions";
-import { executeAction } from "@/src/lib/executeAction";
+import { auth } from "@/src/lib/auth";
+import SignUpForm from "@/src/components/auth/sign-up-form";
 
 const Page = async () => {
   const session = await auth();
@@ -29,47 +25,7 @@ const Page = async () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form
-            className="space-y-4"
-            action={async (formData) => {
-              "use server";
-              const res = await signUp(formData);
-              if (res.success) {
-                // Auto-login after successful sign-up
-                await executeAction({
-                  actionFn: async () => {
-                    await signIn("credentials", formData);
-                  },
-                });
-              }
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="username">Gebruikersnaam</Label>
-              <Input
-                id="username"
-                name="username"
-                placeholder="Voer je gebruikersnaam in"
-                type="text"
-                required
-                autoComplete="username"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Wachtwoord</Label>
-              <Input
-                id="password"
-                name="password"
-                placeholder="Maak een wachtwoord aan"
-                type="password"
-                required
-                autoComplete="new-password"
-              />
-            </div>
-            <Button className="w-full" type="submit">
-              Registreren
-            </Button>
-          </form>
+          <SignUpForm />
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">
           <div className="text-sm text-muted-foreground text-center">

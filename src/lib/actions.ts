@@ -280,3 +280,19 @@ export async function updateGroceryCategory(groceryId: number, categoryId: numbe
     throw new Error('Bijwerken categorie mislukt');
   }
 }
+
+export async function updateGroceryName(groceryId: number, name: string) {
+  try {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error('Naam mag niet leeg zijn');
+    }
+    await prisma.grocery.update({
+      where: { id: groceryId },
+      data: { name: trimmedName },
+    });
+  } catch (error) {
+    console.error('Failed to update grocery name:', error);
+    throw new Error(error instanceof Error ? error.message : 'Bijwerken naam mislukt');
+  }
+}

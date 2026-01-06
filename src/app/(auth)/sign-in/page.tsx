@@ -1,7 +1,4 @@
-import { auth, signIn } from "@/src/lib/auth";
-import { Button } from "@/src/components/ui/button";
-import { Input } from "@/src/components/ui/input";
-import { Label } from "@/src/components/ui/label";
+import { auth } from "@/src/lib/auth";
 import {
   Card,
   CardContent,
@@ -12,11 +9,10 @@ import {
 } from "@/src/components/ui/card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { executeAction } from "@/src/lib/executeAction";
+import SignInForm from "@/src/components/auth/sign-in-form";
 
 const Page = async () => {
   const session = await auth();
-  console.log("Session:", session);
   if (session) redirect("/");
 
   return (
@@ -29,43 +25,7 @@ const Page = async () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form
-            className="space-y-4"
-            action={async (formData) => {
-              "use server";
-              await executeAction({
-                actionFn: async () => {
-                  await signIn("credentials", formData);
-                },
-              });
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="username">Gebruikersnaam</Label>
-              <Input
-                id="username"
-                name="username"
-                placeholder="Voer je gebruikersnaam in"
-                type="text"
-                required
-                autoComplete="username"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Wachtwoord</Label>
-              <Input
-                id="password"
-                name="password"
-                placeholder="Voer je wachtwoord in"
-                type="password"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            <Button className="w-full" type="submit">
-              Inloggen
-            </Button>
-          </form>
+          <SignInForm />
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">
           <div className="text-sm text-muted-foreground text-center">
