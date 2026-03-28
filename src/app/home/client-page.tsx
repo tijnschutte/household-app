@@ -29,9 +29,12 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     const [itemName, setItemName] = useState("");
     const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
     const inputRef = useRef<HTMLInputElement>(null);
+    const isFetchingRef = useRef(false);
 
-    const fetchData = async () => {
-        setIsLoading(true);
+    const fetchData = async (silent = false) => {
+        if (silent && isFetchingRef.current) return;
+        isFetchingRef.current = true;
+        if (!silent) setIsLoading(true);
         try {
             const [list, cats] = await Promise.all([
                 getGroceryList(household.id, userId, showPersonal),
@@ -41,14 +44,17 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
             setCategories(cats);
         } catch (error) {
             console.error("Failed to fetch data:", error);
-            toast.error("Laden van gegevens mislukt");
+            if (!silent) toast.error("Laden van gegevens mislukt");
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
+            isFetchingRef.current = false;
         }
     };
 
     useEffect(() => {
         fetchData();
+        const interval = setInterval(() => fetchData(true), 5000);
+        return () => clearInterval(interval);
     }, [household.id, userId, showPersonal]);
 
     const removeGroceries = async () => {
