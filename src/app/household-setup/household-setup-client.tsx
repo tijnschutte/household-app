@@ -5,27 +5,61 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/src/components/ui/card";
-import { Separator } from "@/src/components/ui/separator";
+import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
 import { createHousehold, joinHousehold } from "@/src/lib/actions";
 import { toast } from "sonner";
-import { Loader2, LogOut } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 
-type HouseholdSetupClientProps = {
-  userId: string;
-};
+type SetupTab = "create" | "join";
 
-export default function HouseholdSetupClient({ userId }: HouseholdSetupClientProps) {
+// Mirrors the ViewToggle segmented control on the home screen (same sliding
+// pill + role="tablist"/"tab" aria pattern), scoped locally since this is the
+// only other place that needs it.
+function SetupTabs({ tab, onChange }: { tab: SetupTab; onChange: (tab: SetupTab) => void }) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Huishouden instellen"
+      className="relative flex w-full rounded-lg bg-secondary p-1"
+    >
+      <span
+        aria-hidden
+        className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-card shadow-sm transition-transform duration-200 ease-out"
+        style={{ transform: tab === "join" ? "translateX(100%)" : "translateX(0)" }}
+      />
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === "create"}
+        onClick={() => onChange("create")}
+        className={`relative z-10 flex h-11 flex-1 items-center justify-center rounded-md text-sm font-medium transition-colors ${
+          tab === "create" ? "text-primary" : "text-muted-foreground"
+        }`}
+      >
+        Nieuw huishouden
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === "join"}
+        onClick={() => onChange("join")}
+        className={`relative z-10 flex h-11 flex-1 items-center justify-center rounded-md text-sm font-medium transition-colors ${
+          tab === "join" ? "text-primary" : "text-muted-foreground"
+        }`}
+      >
+        Deelnemen
+      </button>
+    </div>
+  );
+}
+
+export default function HouseholdSetupClient() {
   const router = useRouter();
+  const [tab, setTab] = useState<SetupTab>("create");
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const handleCreateHousehold = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -33,8 +67,6 @@ export default function HouseholdSetupClient({ userId }: HouseholdSetupClientPro
 
     try {
       const formData = new FormData(e.currentTarget);
-      formData.append("userId", userId);
-
       const result = await createHousehold(formData);
 
       if (result.success) {
@@ -55,10 +87,14 @@ export default function HouseholdSetupClient({ userId }: HouseholdSetupClientPro
   const handleJoinHousehold = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsJoining(true);
+    setJoinError(null);
 
     try {
       const formData = new FormData(e.currentTarget);
-      formData.append("userId", userId);
+      // Normalize casing client-side before submit — the field displays
+      // uppercase via CSS, but the actual value may still be lowercase.
+      const rawSecret = (formData.get("secret") as string) ?? "";
+      formData.set("secret", rawSecret.trim().toUpperCase());
 
       const result = await joinHousehold(formData);
 
@@ -67,49 +103,47 @@ export default function HouseholdSetupClient({ userId }: HouseholdSetupClientPro
         router.push("/home");
         router.refresh();
       } else {
-        toast.error(result.message);
+        setJoinError(result.message);
       }
     } catch (error) {
       console.error("Error joining household:", error);
-      toast.error("Deelnemen aan huishouden mislukt");
+      setJoinError("Deelnemen aan huishouden mislukt");
     } finally {
       setIsJoining(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-background p-4">
-      <div className="w-full max-w-2xl relative">
-        <div className="absolute top-0 left-0">
+    <div className="flex min-h-screen w-full flex-col items-center bg-background p-4">
+      <div className="w-full max-w-2xl">
+        <div className="flex justify-end pb-2">
           <Button
+            type="button"
             variant="ghost"
-            size="icon"
             onClick={() => signOut()}
-            className="hover:bg-gray-100 active:bg-gray-200"
+            className="text-muted-foreground"
           >
-            <LogOut className="w-5 h-5" />
+            Uitloggen
           </Button>
         </div>
-        <Card className="w-full">
-          <CardHeader className="space-y-1">
+        <Card className="w-full p-6">
+          <CardHeader className="space-y-1 p-0 pb-6">
             <CardTitle className="text-xl font-semibold">Stel je huishouden in</CardTitle>
-            <CardDescription>
-              Maak een nieuw huishouden aan of neem deel aan een bestaand huishouden om te beginnen
-            </CardDescription>
+            <p className="text-sm text-muted-foreground">
+              Maak een huishouden aan of doe mee met een bestaand huishouden.
+            </p>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Create Household Section */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Nieuw huishouden maken
-              </h3>
+          <CardContent className="space-y-6 p-0">
+            <SetupTabs tab={tab} onChange={setTab} />
+
+            {tab === "create" ? (
               <form className="space-y-4" onSubmit={handleCreateHousehold}>
                 <div className="space-y-2">
                   <Label htmlFor="household-name">Huishoudnaam</Label>
                   <Input
                     id="household-name"
                     name="name"
-                    placeholder="Voer huishoudnaam in (bijv. Familie Jansen)"
+                    placeholder="bijv. Familie Jansen"
                     type="text"
                     required
                     disabled={isCreating}
@@ -127,40 +161,38 @@ export default function HouseholdSetupClient({ userId }: HouseholdSetupClientPro
                   )}
                 </Button>
               </form>
-            </div>
-
-            <div className="relative">
-              <Separator />
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-                OF
-              </div>
-            </div>
-
-            {/* Join Household Section */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Deelnemen aan bestaand huishouden
-              </h3>
+            ) : (
               <form className="space-y-4" onSubmit={handleJoinHousehold}>
                 <div className="space-y-2">
                   <Label htmlFor="household-secret">Huishoudcode</Label>
                   <Input
                     id="household-secret"
                     name="secret"
-                    placeholder="Voer de huishoudcode in"
+                    placeholder="bijv. A1B2C3D4E5F6"
                     type="text"
                     required
                     disabled={isJoining}
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    spellCheck={false}
+                    inputMode="text"
+                    maxLength={12}
+                    aria-invalid={joinError ? true : undefined}
+                    aria-describedby={joinError ? "household-secret-error" : undefined}
+                    onChange={() => setJoinError(null)}
                     className="h-12 font-mono uppercase"
                   />
-                  <p className="text-xs text-muted-foreground">Vraag de code aan een huishoudlid</p>
+                  {joinError ? (
+                    <p id="household-secret-error" className="text-xs text-destructive">
+                      {joinError}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Vraag de code aan een huishoudlid
+                    </p>
+                  )}
                 </div>
-                <Button
-                  type="submit"
-                  variant="secondary"
-                  className="w-full h-12"
-                  disabled={isJoining}
-                >
+                <Button type="submit" className="w-full h-12" disabled={isJoining}>
                   {isJoining ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -171,7 +203,7 @@ export default function HouseholdSetupClient({ userId }: HouseholdSetupClientPro
                   )}
                 </Button>
               </form>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

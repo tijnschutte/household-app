@@ -16,5 +16,5 @@ export default async function HouseholdSetupPage() {
     redirect("/home");
   }
 
-  return <HouseholdSetupClient userId={session.user.id as string} />;
+  return <HouseholdSetupClient />;
 }

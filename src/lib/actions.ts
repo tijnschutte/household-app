@@ -204,11 +204,15 @@ export async function deleteItems(ids: number[]) {
 export const createHousehold = async (formData: FormData) => {
   return executeAction({
     actionFn: async () => {
-      const name = formData.get("name") as string;
-      const userId = formData.get("userId") as string;
+      const { userId, householdId } = await requireUser();
+      if (householdId != null) {
+        throw new Error("Je zit al in een huishouden");
+      }
 
-      if (!name || !userId) {
-        throw new Error("Naam en gebruikers-ID zijn vereist");
+      const name = formData.get("name") as string;
+
+      if (!name) {
+        throw new Error("Naam is vereist");
       }
 
       const trimmedName = name.trim();
@@ -232,7 +236,7 @@ export const createHousehold = async (formData: FormData) => {
           name: trimmedName,
           secret: shortSecret,
           members: {
-            connect: { id: parseInt(userId) },
+            connect: { id: userId },
           },
         },
       });
@@ -246,11 +250,15 @@ export const createHousehold = async (formData: FormData) => {
 export const joinHousehold = async (formData: FormData) => {
   return executeAction({
     actionFn: async () => {
-      const secret = formData.get("secret") as string;
-      const userId = formData.get("userId") as string;
+      const { userId, householdId } = await requireUser();
+      if (householdId != null) {
+        throw new Error("Je zit al in een huishouden");
+      }
 
-      if (!secret || !userId) {
-        throw new Error("Code en gebruikers-ID zijn vereist");
+      const secret = formData.get("secret") as string;
+
+      if (!secret) {
+        throw new Error("Code is vereist");
       }
 
       const household = await db.household.findUnique({
@@ -262,7 +270,7 @@ export const joinHousehold = async (formData: FormData) => {
       }
 
       await db.user.update({
-        where: { id: parseInt(userId) },
+        where: { id: userId },
         data: { householdId: household.id },
       });
 
