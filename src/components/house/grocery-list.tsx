@@ -395,6 +395,7 @@ function DroppableCategory({
   onAdd,
   onDeleteItem,
   onItemEditingChange,
+  isDragActive,
 }: {
   id: string;
   title: string;
@@ -408,6 +409,7 @@ function DroppableCategory({
   onAdd?: () => void;
   onDeleteItem: (groceryId: number) => void;
   onItemEditingChange?: (id: number, editing: boolean) => void;
+  isDragActive: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   // A category whose items are all checked still has items — it stays
@@ -449,13 +451,15 @@ function DroppableCategory({
         </div>
       </div>
       {isEmpty ? (
-        // Compact empty category: just a thin dashed drop line under the
-        // header that grows and highlights while a drag hovers it.
-        <div
-          className={`mx-1 mt-1 rounded border border-dashed transition-all ${
-            isOver ? "h-8 border-primary bg-primary/10" : "h-1.5 border-gray-300"
-          }`}
-        />
+        // Empty category at rest is just its header; the dashed drop line
+        // only appears while a drag is in progress (grows/highlights on hover).
+        isDragActive && (
+          <div
+            className={`mx-1 mt-1 rounded border border-dashed transition-all ${
+              isOver ? "h-8 border-primary bg-primary/10" : "h-1.5 border-gray-300"
+            }`}
+          />
+        )
       ) : (
         <div className="space-y-1">
           {items.map((item) => (
@@ -634,6 +638,7 @@ export default function GroceryList({
                 onAdd={onAddToCategory ? () => onAddToCategory(category.id) : undefined}
                 onDeleteItem={onDeleteItem}
                 onItemEditingChange={handleItemEditingChange}
+                isDragActive={isDragActive}
               />
             ))}
 

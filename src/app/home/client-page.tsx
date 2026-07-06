@@ -498,7 +498,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           trigger={
             <Button
               variant="ghost"
-              className="mt-2 h-11 w-full justify-start gap-2 px-1 text-sm font-normal text-muted-foreground hover:text-foreground"
+              className="mt-4 h-11 w-full justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-normal text-muted-foreground hover:text-foreground"
             >
               <Plus className="h-4 w-4" />
               Categorie toevoegen
@@ -561,6 +561,10 @@ export default function HouseholdClientPage({ household, initialData }: Househol
                 {targetCategory && <span className="truncate">{targetCategory.name}</span>}
               </SelectTrigger>
               <SelectContent
+                side="top"
+                align="start"
+                sideOffset={10}
+                className="min-w-48 rounded-2xl border-border p-1.5 shadow-lg"
                 onCloseAutoFocus={(e) => {
                   // After picking a category, put the caret straight back in
                   // the item input so the user can type the item name.
@@ -568,9 +572,15 @@ export default function HouseholdClientPage({ household, initialData }: Househol
                   inputRef.current?.focus();
                 }}
               >
-                <SelectItem value="none">Geen categorie</SelectItem>
+                <SelectItem value="none" className="rounded-lg py-2.5">
+                  Geen categorie
+                </SelectItem>
                 {categories.map((category) => (
-                  <SelectItem key={category.id} value={String(category.id)}>
+                  <SelectItem
+                    key={category.id}
+                    value={String(category.id)}
+                    className="rounded-lg py-2.5"
+                  >
                     {category.name}
                   </SelectItem>
                 ))}
