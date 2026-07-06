@@ -17,56 +17,40 @@ export async function getHouseholdById(userId: number) : Promise<Household | nul
 }
 
 
-export async function getGroceryList(personal: boolean) {
+export async function getHomeData(personal: boolean) {
     const { userId, householdId } = await requireUser();
 
     try {
         // No household and not asking for the personal list: nothing to scope to.
         if (!personal && !householdId) {
-            return [];
+            return { items: [], categories: [] };
         }
 
-        const groceryList = await prisma.grocery.findMany({
-            where: personal
-                ? { userId, householdId: null, bought: false }
-                : { householdId, bought: false },
-            include: {
-                category: true,
-            },
-            orderBy: [
-                { categoryId: 'asc' }, // null values (uncategorized) come first
-                { name: 'asc' },
-            ],
-        });
+        const [items, categories] = await Promise.all([
+            prisma.grocery.findMany({
+                where: personal
+                    ? { userId, householdId: null, bought: false }
+                    : { householdId, bought: false },
+                include: {
+                    category: true,
+                },
+                orderBy: [
+                    { categoryId: 'asc' }, // null values (uncategorized) come first
+                    { name: 'asc' },
+                ],
+            }),
+            prisma.category.findMany({
+                where: personal
+                    ? { userId, householdId: null }
+                    : { householdId },
+                orderBy: { name: 'asc' },
+            }),
+        ]);
 
-        return groceryList;
-
-    } catch (error) {
-        console.error('Failed to fetch grocery list:', error);
-        throw new Error('Ophalen van boodschappenlijst mislukt');
-    }
-}
-
-export async function getCategories(personal: boolean) {
-    const { userId, householdId } = await requireUser();
-
-    try {
-        // No household and not asking for the personal list: nothing to scope to.
-        if (!personal && !householdId) {
-            return [];
-        }
-
-        const categories = await prisma.category.findMany({
-            where: personal
-                ? { userId, householdId: null }
-                : { householdId },
-            orderBy: { name: 'asc' },
-        });
-
-        return categories;
+        return { items, categories };
 
     } catch (error) {
-        console.error('Failed to fetch categories:', error);
-        throw new Error('Ophalen van categorieën mislukt');
+        console.error('Failed to fetch home data:', error);
+        throw new Error('Ophalen van gegevens mislukt');
     }
 }

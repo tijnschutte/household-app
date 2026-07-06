@@ -31,6 +31,8 @@ type GroceryListProps = {
   onDeleteCategory: (categoryId: number) => void;
   onRenameItem: (groceryId: number, newName: string) => void;
   showCategories?: boolean;
+  /** Set to true while a drag or inline rename is in progress, so callers (e.g. polling) can skip clobbering it. */
+  busyRef?: React.MutableRefObject<boolean>;
 };
 
 function DraggableGroceryItem({
@@ -38,11 +40,13 @@ function DraggableGroceryItem({
   isSelected,
   onClick,
   onRename,
+  onEditingChange,
 }: {
   item: GroceryWithCategory;
   isSelected: boolean;
   onClick: () => void;
   onRename: (newName: string) => void;
+  onEditingChange?: (editing: boolean) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(item.name);
@@ -58,6 +62,16 @@ function DraggableGroceryItem({
     }
   }, [isEditing]);
 
+  const startEditing = () => {
+    setIsEditing(true);
+    onEditingChange?.(true);
+  };
+
+  const stopEditing = () => {
+    setIsEditing(false);
+    onEditingChange?.(false);
+  };
+
   const handleSave = () => {
     const trimmed = editValue.trim().slice(0, 30);
     if (trimmed && trimmed !== item.name) {
@@ -65,7 +79,7 @@ function DraggableGroceryItem({
     } else {
       setEditValue(item.name);
     }
-    setIsEditing(false);
+    stopEditing();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -73,7 +87,7 @@ function DraggableGroceryItem({
       handleSave();
     } else if (e.key === "Escape") {
       setEditValue(item.name);
-      setIsEditing(false);
+      stopEditing();
     }
   };
 
@@ -109,7 +123,7 @@ function DraggableGroceryItem({
       onClick={onClick}
       onDoubleClick={(e) => {
         e.stopPropagation();
-        setIsEditing(true);
+        startEditing();
       }}
       className={`
         flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer group select-none
@@ -140,7 +154,7 @@ function DraggableGroceryItem({
       <button
         onClick={(e) => {
           e.stopPropagation();
-          setIsEditing(true);
+          startEditing();
         }}
         className="p-1 hover:bg-gray-100 rounded"
       >
@@ -155,11 +169,13 @@ function UncategorizedItems({
   selectedItems,
   toggleSelection,
   onRenameItem,
+  onItemEditingChange,
 }: {
   items: GroceryWithCategory[];
   selectedItems: Set<number>;
   toggleSelection: (id: number) => void;
   onRenameItem: (groceryId: number, newName: string) => void;
+  onItemEditingChange?: (id: number, editing: boolean) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: "uncategorized" });
 
@@ -177,6 +193,7 @@ function UncategorizedItems({
             isSelected={selectedItems.has(item.id)}
             onClick={() => toggleSelection(item.id)}
             onRename={(newName) => onRenameItem(item.id, newName)}
+            onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
           />
         ))
       )}
@@ -192,6 +209,7 @@ function DroppableCategory({
   toggleSelection,
   onDelete,
   onRenameItem,
+  onItemEditingChange,
   isUncategorized = false,
 }: {
   id: string;
@@ -201,6 +219,7 @@ function DroppableCategory({
   toggleSelection: (id: number) => void;
   onDelete?: () => void;
   onRenameItem: (groceryId: number, newName: string) => void;
+  onItemEditingChange?: (id: number, editing: boolean) => void;
   isUncategorized?: boolean;
 }) {
   const { setNodeRef } = useDroppable({ id });
@@ -246,6 +265,7 @@ function DroppableCategory({
               isSelected={selectedItems.has(item.id)}
               onClick={() => toggleSelection(item.id)}
               onRename={(newName) => onRenameItem(item.id, newName)}
+              onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
             />
           ))
         )}
@@ -264,10 +284,23 @@ export default function GroceryList({
   onDeleteCategory,
   onRenameItem,
   showCategories = true,
+  busyRef,
 }: GroceryListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const editingIdsRef = useRef<Set<number>>(new Set());
+
+  const handleItemEditingChange = (id: number, editing: boolean) => {
+    if (editing) {
+      editingIdsRef.current.add(id);
+    } else {
+      editingIdsRef.current.delete(id);
+    }
+    if (busyRef) {
+      busyRef.current = activeDragId !== null || editingIdsRef.current.size > 0;
+    }
+  };
 
   useEffect(() => {
     setIsMounted(true);
@@ -295,11 +328,13 @@ export default function GroceryList({
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDragId(event.active.id as number);
+    if (busyRef) busyRef.current = true;
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveDragId(null);
+    if (busyRef) busyRef.current = editingIdsRef.current.size > 0;
 
     if (!over) return;
 
@@ -376,6 +411,7 @@ export default function GroceryList({
               toggleSelection={toggleSelection}
               onDelete={() => onDeleteCategory(category.id)}
               onRenameItem={onRenameItem}
+              onItemEditingChange={handleItemEditingChange}
             />
           ))}
 
@@ -386,6 +422,7 @@ export default function GroceryList({
               selectedItems={selectedItems}
               toggleSelection={toggleSelection}
               onRenameItem={onRenameItem}
+              onItemEditingChange={handleItemEditingChange}
             />
           )}
 
@@ -399,6 +436,7 @@ export default function GroceryList({
                   isSelected={selectedItems.has(item.id)}
                   onClick={() => toggleSelection(item.id)}
                   onRename={(newName) => onRenameItem(item.id, newName)}
+                  onEditingChange={(editing) => handleItemEditingChange(item.id, editing)}
                 />
               ))}
             </div>

@@ -1,9 +1,9 @@
 "use client";
 
 import { Grocery, Household, Category } from "@prisma/client";
-import { useEffect, useState, useRef, useCallback } from "react";
-import { User, House, Plus, Trash2, ShoppingBasket, Loader2, Info, LogOut } from "lucide-react";
-import { getGroceryList, getCategories } from "@/src/lib/data";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { User, House, Plus, Trash2, Loader2, Info, LogOut } from "lucide-react";
+import { getHomeData } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
 import { createGroceryItem, deleteItems, updateGroceryCategory, deleteCategory, updateGroceryName } from "@/src/lib/actions";
@@ -15,48 +15,69 @@ import { signOut } from "next-auth/react";
 
 type GroceryWithCategory = Grocery & { category: Category | null };
 
-type HouseholdClientPageProps = {
-    household: Household;
+type ViewData = {
+    items: GroceryWithCategory[];
+    categories: Category[];
 };
 
-export default function HouseholdClientPage({ household }: HouseholdClientPageProps) {
-    const [groceryList, setGroceryList] = useState<GroceryWithCategory[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
+type ViewKey = "household" | "personal";
+
+type HouseholdClientPageProps = {
+    household: Household;
+    initialData: ViewData;
+};
+
+export default function HouseholdClientPage({ household, initialData }: HouseholdClientPageProps) {
+    // Both views are cached independently so toggling back and forth is instant
+    // after the first visit. The household view is seeded server-side.
+    const [dataByView, setDataByView] = useState<Record<ViewKey, ViewData | null>>({
+        household: initialData,
+        personal: null,
+    });
     const [showPersonal, setShowPersonal] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
     const [isPending, setIsPending] = useState(false);
     const [itemName, setItemName] = useState("");
     const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
     const inputRef = useRef<HTMLInputElement>(null);
+    // Flipped by GroceryList while a drag or inline rename is in progress, so a
+    // silent poll refresh can't clobber an in-flight edit.
+    const busyRef = useRef(false);
 
-    const fetchData = useCallback(async (silent = false) => {
-        if (!silent) setIsLoading(true);
+    const viewKey: ViewKey = showPersonal ? "personal" : "household";
+    const currentView = dataByView[viewKey];
+    const groceryList = currentView?.items ?? [];
+    const categories = currentView?.categories ?? [];
+    const isLoading = currentView === null;
+
+    const fetchData = useCallback(async (view: ViewKey, options?: { silent?: boolean }) => {
+        const silent = options?.silent ?? false;
         try {
-            const [list, cats] = await Promise.all([
-                getGroceryList(showPersonal),
-                getCategories(showPersonal),
-            ]);
-            setGroceryList(list as GroceryWithCategory[]);
-            setCategories(cats);
+            const data = await getHomeData(view === "personal");
+
+            // A poll finished while the user is mid-drag/mid-rename: don't clobber it.
+            if (silent && busyRef.current) return;
+
+            setDataByView((prev) => {
+                const existing = prev[view];
+                // Avoid a pointless re-render when nothing actually changed.
+                if (existing && JSON.stringify(existing) === JSON.stringify(data)) {
+                    return prev;
+                }
+                return { ...prev, [view]: data };
+            });
         } catch (error) {
             console.error("Failed to fetch data:", error);
             if (!silent) toast.error("Laden van gegevens mislukt");
-        } finally {
-            if (!silent) setIsLoading(false);
         }
-    }, [showPersonal]);
+    }, []);
 
+    // Real-time sync: poll every 10s + refetch on tab focus, for the currently visible view only.
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    // Real-time sync: poll every 10s + refetch on tab focus
-    useEffect(() => {
-        const interval = setInterval(() => fetchData(true), 10000);
+        const interval = setInterval(() => fetchData(viewKey, { silent: true }), 10000);
 
         const handleVisibility = () => {
             if (document.visibilityState === "visible") {
-                fetchData(true);
+                fetchData(viewKey, { silent: true });
             }
         };
         document.addEventListener("visibilitychange", handleVisibility);
@@ -65,14 +86,33 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
             clearInterval(interval);
             document.removeEventListener("visibilitychange", handleVisibility);
         };
-    }, [fetchData]);
+    }, [fetchData, viewKey]);
+
+    const handleToggleView = (personal: boolean) => {
+        setShowPersonal(personal);
+        const key: ViewKey = personal ? "personal" : "household";
+        if (dataByView[key] === null) {
+            fetchData(key);
+        }
+    };
+
+    const updateView = (key: ViewKey, updater: (data: ViewData) => ViewData) => {
+        setDataByView((prev) => {
+            const current = prev[key];
+            if (!current) return prev;
+            return { ...prev, [key]: updater(current) };
+        });
+    };
 
     const removeGroceries = async () => {
         setIsPending(true);
         try {
             const deletedItems = Array.from(selectedItems);
             await deleteItems(deletedItems);
-            setGroceryList((prev) => prev.filter((item) => !selectedItems.has(item.id)));
+            updateView(viewKey, (data) => ({
+                ...data,
+                items: data.items.filter((item) => !selectedItems.has(item.id)),
+            }));
             setSelectedItems(new Set());
             toast.success(`${deletedItems.length} item${deletedItems.length === 1 ? '' : 's'} verwijderd`);
         } catch (error) {
@@ -110,7 +150,10 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
                 return;
             }
             const newItem = await createGroceryItem(itemName, showPersonal);
-            setGroceryList([...groceryList, { ...newItem, category: null }]);
+            updateView(viewKey, (data) => ({
+                ...data,
+                items: [...data.items, { ...newItem, category: null }],
+            }));
             setItemName("");
             toast.success(`"${newItem.name}" toegevoegd`);
             // Re-focus input for quick consecutive additions
@@ -140,13 +183,14 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
 
         // Optimistic update - update local state immediately
         const targetCategory = categories.find(c => c.id === categoryId) || null;
-        setGroceryList((prev) =>
-            prev.map((item) =>
+        updateView(viewKey, (data) => ({
+            ...data,
+            items: data.items.map((item) =>
                 item.id === groceryId
                     ? { ...item, categoryId, category: targetCategory }
                     : item
-            )
-        );
+            ),
+        }));
 
         try {
             await updateGroceryCategory(groceryId, categoryId);
@@ -154,13 +198,14 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
             toast.success(`Item verplaatst naar ${categoryName}`);
         } catch (error) {
             // Revert on error
-            setGroceryList((prev) =>
-                prev.map((item) =>
+            updateView(viewKey, (data) => ({
+                ...data,
+                items: data.items.map((item) =>
                     item.id === groceryId
                         ? { ...item, categoryId: previousCategoryId, category: previousCategory }
                         : item
-                )
-            );
+                ),
+            }));
             console.error("Failed to update category:", error);
             toast.error("Verplaatsen mislukt");
         }
@@ -169,12 +214,12 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
     const handleDeleteCategory = async (categoryId: number) => {
         try {
             await deleteCategory(categoryId);
-            setCategories((prev) => prev.filter((cat) => cat.id !== categoryId));
-            setGroceryList((prev) =>
-                prev.map((item) =>
+            updateView(viewKey, (data) => ({
+                items: data.items.map((item) =>
                     item.categoryId === categoryId ? { ...item, categoryId: null, category: null } : item
-                )
-            );
+                ),
+                categories: data.categories.filter((cat) => cat.id !== categoryId),
+            }));
             toast.success("Categorie verwijderd");
         } catch (error) {
             console.error("Failed to delete category:", error);
@@ -185,11 +230,12 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
     const handleRenameItem = async (groceryId: number, newName: string) => {
         try {
             await updateGroceryName(groceryId, newName);
-            setGroceryList((prev) =>
-                prev.map((item) =>
+            updateView(viewKey, (data) => ({
+                ...data,
+                items: data.items.map((item) =>
                     item.id === groceryId ? { ...item, name: newName } : item
-                )
-            );
+                ),
+            }));
             toast.success("Item hernoemd");
         } catch (error) {
             console.error("Failed to rename item:", error);
@@ -230,7 +276,7 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
                 <div className="mb-4 flex justify-end">
                     <AddCategory
                         showPersonal={showPersonal}
-                        onCategoryAdded={fetchData}
+                        onCategoryAdded={() => fetchData(viewKey)}
                     />
                 </div>
                 <GroceryList
@@ -243,6 +289,7 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
                     onDeleteCategory={handleDeleteCategory}
                     onRenameItem={handleRenameItem}
                     showCategories={true}
+                    busyRef={busyRef}
                 />
             </main>
 
@@ -303,7 +350,7 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
                     <Button
                         variant={!showPersonal ? "default" : "outline"}
                         size="lg"
-                        onClick={() => setShowPersonal(false)}
+                        onClick={() => handleToggleView(false)}
                         className="min-w-[120px] shadow-md hover:shadow-lg active:scale-95 transition-all gap-2"
                     >
                         <House className="w-4 h-4" />
@@ -312,7 +359,7 @@ export default function HouseholdClientPage({ household }: HouseholdClientPagePr
                     <Button
                         variant={showPersonal ? "default" : "outline"}
                         size="lg"
-                        onClick={() => setShowPersonal(true)}
+                        onClick={() => handleToggleView(true)}
                         className="min-w-[120px] shadow-md hover:shadow-lg active:scale-95 transition-all gap-2"
                     >
                         <User className="w-4 h-4" />
