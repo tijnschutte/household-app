@@ -50,11 +50,30 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
   }, []);
 
   const copySecret = async () => {
-    if (household.secret) {
-      await navigator.clipboard.writeText(household.secret);
+    if (!household.secret) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(household.secret);
+      } else {
+        // navigator.clipboard only exists in secure contexts (https/localhost);
+        // fall back to execCommand for e.g. http over LAN.
+        const el = document.createElement("textarea");
+        el.value = household.secret;
+        el.setAttribute("readonly", "");
+        el.style.position = "fixed";
+        el.style.opacity = "0";
+        document.body.appendChild(el);
+        el.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(el);
+        if (!ok) throw new Error("execCommand copy failed");
+      }
       setCopied(true);
       toast.success("Code gekopieerd");
       setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Error copying household code:", error);
+      toast.error("Kopiëren mislukt");
     }
   };
 
