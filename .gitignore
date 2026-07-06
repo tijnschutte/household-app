@@ -13,3 +13,4 @@ dist/
 # Claude Code local state
 .claude/worktrees/
 .claude/settings.local.json
+.claude/agent-context.md
