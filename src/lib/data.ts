@@ -3,11 +3,19 @@ import prisma from "@/src/lib/db/db";
 import { Household } from "@prisma/client";
 import { requireUser } from "@/src/lib/session";
 
-export async function getHouseholdById(userId: number): Promise<Household | null> {
+export type HouseholdWithMembers = Household & {
+  members: { id: number; name: string }[];
+};
+
+export async function getHouseholdById(userId: number): Promise<HouseholdWithMembers | null> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { household: true },
+      include: {
+        household: {
+          include: { members: { select: { id: true, name: true } } },
+        },
+      },
     });
     return user?.household || null;
   } catch (error) {
