@@ -99,9 +99,7 @@ function DraggableGroceryItem({
 
   if (isEditing) {
     return (
-      <div
-        className="flex items-center space-x-2 p-2.5 rounded-lg bg-white border-2 border-blue-400 shadow-md"
-      >
+      <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-white border-2 border-blue-400 shadow-md">
         <div className="w-5 h-5 flex-shrink-0" />
         <Input
           ref={inputRef}
@@ -180,7 +178,10 @@ function UncategorizedItems({
   const { setNodeRef } = useDroppable({ id: "uncategorized" });
 
   return (
-    <div ref={setNodeRef} className="space-y-2 min-h-[60px] p-3 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30">
+    <div
+      ref={setNodeRef}
+      className="space-y-2 min-h-[60px] p-3 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30"
+    >
       {items.length === 0 ? (
         <p className="text-sm text-gray-400 italic text-center py-2">
           Sleep items hierheen om uit categorie te halen
@@ -228,9 +229,7 @@ function DroppableCategory({
     <div
       ref={setNodeRef}
       className={`space-y-2 p-3 rounded-lg ${
-        isUncategorized
-          ? "bg-gray-50/50"
-          : "bg-blue-50/30 border border-blue-100"
+        isUncategorized ? "bg-gray-50/50" : "bg-blue-50/30 border border-blue-100"
       }`}
     >
       <div className="flex items-center justify-between px-2">
@@ -254,9 +253,7 @@ function DroppableCategory({
       </div>
       <div className="space-y-2">
         {items.length === 0 ? (
-          <p className="text-sm text-gray-400 italic px-2 py-4 text-center">
-            Sleep items hierheen
-          </p>
+          <p className="text-sm text-gray-400 italic px-2 py-4 text-center">Sleep items hierheen</p>
         ) : (
           items.map((item) => (
             <DraggableGroceryItem
@@ -320,12 +317,6 @@ export default function GroceryList({
     })
   );
 
-  useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [groceryList.length]);
-
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDragId(event.active.id as number);
     if (busyRef) busyRef.current = true;
@@ -371,16 +362,6 @@ export default function GroceryList({
 
   const activeItem = groceryList.find((item) => item.id === activeDragId);
 
-  if (!isMounted) {
-    return (
-      <div ref={listRef} className="w-full space-y-6">
-        <div className="flex items-center justify-center p-8 text-gray-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        </div>
-      </div>
-    );
-  }
-
   // Render list content (common for both draggable and non-draggable modes)
   const renderContent = () => (
     <div ref={listRef} className="w-full space-y-6">
@@ -401,19 +382,20 @@ export default function GroceryList({
       {!isLoading && (
         <>
           {/* Categorized Sections - Show all categories, even empty ones */}
-          {showCategories && categorizedItems.map(({ category, items }) => (
-            <DroppableCategory
-              key={category.id}
-              id={`category-${category.id}`}
-              title={category.name}
-              items={items}
-              selectedItems={selectedItems}
-              toggleSelection={toggleSelection}
-              onDelete={() => onDeleteCategory(category.id)}
-              onRenameItem={onRenameItem}
-              onItemEditingChange={handleItemEditingChange}
-            />
-          ))}
+          {showCategories &&
+            categorizedItems.map(({ category, items }) => (
+              <DroppableCategory
+                key={category.id}
+                id={`category-${category.id}`}
+                title={category.name}
+                items={items}
+                selectedItems={selectedItems}
+                toggleSelection={toggleSelection}
+                onDelete={() => onDeleteCategory(category.id)}
+                onRenameItem={onRenameItem}
+                onItemEditingChange={handleItemEditingChange}
+              />
+            ))}
 
           {/* Uncategorized Section - at the bottom, without title - only show when categories are enabled and there are items or categories */}
           {showCategories && (uncategorizedItems.length > 0 || categories.length > 0) && (
@@ -446,12 +428,22 @@ export default function GroceryList({
     </div>
   );
 
+  const content = renderContent();
+
   // When categories are disabled, render simple list without DndContext
   if (!showCategories) {
-    return renderContent();
+    return content;
   }
 
-  // When categories are enabled, wrap in DndContext for drag-and-drop
+  // The list content itself (rows, categories) must render in the server
+  // HTML so WP-2's fast first paint isn't wasted. Only the drag layer
+  // (DndContext + DragOverlay) is gated on mount — dnd-kit's sensors touch
+  // the DOM/window and can mismatch between server and client — so it's
+  // wrapped around the already-rendered `content` instead of replacing it.
+  if (!isMounted) {
+    return content;
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -463,14 +455,12 @@ export default function GroceryList({
         acceleration: 15,
       }}
     >
-      {renderContent()}
+      {content}
 
       <DragOverlay>
         {activeItem ? (
           <div className="bg-white border-2 border-blue-500 shadow-2xl p-2.5 rounded-lg opacity-90">
-            <span className="text-base font-medium first-letter:uppercase">
-              {activeItem.name}
-            </span>
+            <span className="text-base font-medium first-letter:uppercase">{activeItem.name}</span>
           </div>
         ) : null}
       </DragOverlay>

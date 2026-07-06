@@ -10,7 +10,7 @@ Implementation-ready plan for improving the household grocery app. Written for i
 - **UI language is Dutch** — all user-facing strings, including new toasts and empty states. Code, comments, and identifiers in English.
 - **Mobile-first**: this app is used as a PWA on phones. Test at ~390px viewport width. Touch targets ≥ 44px. Desktop just needs to not break (max-w-2xl centered layout).
 - **Conventions**: server actions in `src/lib/actions.ts` (mutations) and `src/lib/data.ts` (reads); form-based actions return `{success, message}` via `executeAction()`; Zod schemas in `src/lib/schema.ts` with Dutch messages; shadcn/ui components in `src/components/ui/`.
-- **Schema changes**: run `pnpm db:migrate` (Prisma, schema at `src/lib/db/schema.prisma`). Only WP-1 touches the schema.
+- **Schema changes**: see the Local dev DB bullet above (migrate diff + deploy). Only WP-1 touches the schema.
 - **Do not add new dependencies** unless a WP explicitly says so. Everything needed (dnd-kit, sonner, zod, shadcn primitives) is installed.
 - The uncommitted polling-sync code in `src/app/home/client-page.tsx` (10s interval + refetch on tab focus) is part of the baseline — keep that behavior working through every refactor.
 
