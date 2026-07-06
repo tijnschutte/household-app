@@ -213,6 +213,7 @@ These change data flow and action signatures that later WPs build on.
 3. **Clear-all affordance**: when ≥1 item is checked in the current view, show a slim bar docked above the footer add-bar (inside the footer container, full width, subtle background): `n in je mandje` left, a `Wissen` button right. Tapping Wissen deletes all bought items in the current view with the existing undo toast. Bar animates in/out (height/opacity, ~150ms). No AlertDialog — undo covers mistakes.
 4. **Drag**: checked items are not draggable (pointless mid-trip; avoids accidental drags) — hide the drag handle on checked rows.
 5. Polling/optimistic semantics unchanged. Style per WP-7's design language (this runs after WP-7 — flat rows, no shadows).
+6. **Fix swipe-button bleed**: after WP-7, a sliver of the absolutely-positioned red swipe-delete button shows along the right edge of rows (rounded corners expose it). Clip it (e.g. `overflow-hidden` on the row wrapper or matching radius/inset on the button) without breaking the swipe reveal.
 
 **Acceptance**: checking an item strikes it through in place and sinks it within its group; header counts show remaining-unchecked; the "n in je mandje / Wissen" bar appears only when something is checked and clears the current view's bought items with undo; checked rows can't be dragged but can be swiped away; two-browser sync still shows checkmarks within one poll.
 

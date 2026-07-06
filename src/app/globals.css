@@ -1,14 +1,56 @@
 @import "tailwindcss";
 
+/*
+ * Design language (WP-7) — calm, flat, content-first. Defined once here,
+ * consumed everywhere via the generated `bg-*` / `text-*` / `border-*`
+ * utilities (e.g. `bg-primary`, `border-border`, `text-muted-foreground`).
+ *
+ * - Brand: a single blue-900 (--color-primary), used for the header, primary
+ *   buttons, focus rings and active/selected states. No gradients.
+ * - Neutrals: one gray scale — gray-50 page background, white cards, gray-200
+ *   hairline borders, gray-500 muted text, gray-900 body text.
+ * - Radius: rounded-xl for cards/page-level surfaces, rounded-lg for controls
+ *   (buttons, inputs, list rows, the segmented control).
+ * - Shadows: none on static content (cards, rows, category boxes). A subtle
+ *   shadow-sm is reserved for things that are genuinely floating above the
+ *   page (the segmented control's sliding pill, the drag overlay, Radix
+ *   dialog/popover surfaces).
+ * - Motion: no scale transforms; a single press state (active:opacity-70 or
+ *   a background-color change), with `transition-colors` only where a state
+ *   actually changes (check-off, section collapse, focus).
+ */
 @theme {
+  --color-background: #f9fafb;
+  --color-foreground: #111827;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #111827;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #111827;
+
   --color-primary: #1e3a8a;
   --color-primary-foreground: #ffffff;
-  --color-destructive: #ef4444;
+
+  --color-secondary: #f3f4f6;
+  --color-secondary-foreground: #1e3a8a;
+
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #6b7280;
+
+  --color-accent: #f3f4f6;
+  --color-accent-foreground: #111827;
+
+  --color-destructive: #dc2626;
   --color-destructive-foreground: #ffffff;
+
+  --color-border: #e5e7eb;
+  --color-input: #e5e7eb;
+  --color-ring: #1e3a8a;
 }
 
 /* Make app feel native - disable overscroll bounce effect */
-html, body {
+html,
+body {
   overscroll-behavior: none;
   overflow: hidden;
   height: 100%;

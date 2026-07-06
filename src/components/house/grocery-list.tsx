@@ -66,10 +66,10 @@ function CheckCircle({ bought }: { bought: boolean }) {
     <div
       className={`
         w-6 h-6 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition-colors
-        ${bought ? "bg-blue-600 border-blue-600" : "border-gray-300"}
+        ${bought ? "bg-primary border-primary" : "border-gray-300"}
       `}
     >
-      {bought && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+      {bought && <Check className="w-4 h-4 text-primary-foreground" strokeWidth={3} />}
     </div>
   );
 }
@@ -246,7 +246,7 @@ function DraggableGroceryItem({
 
   if (isEditing) {
     return (
-      <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-white border-2 border-blue-400 shadow-md">
+      <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-card border border-primary">
         <div className="w-6 h-6 flex-shrink-0" />
         <Input
           ref={inputRef}
@@ -263,7 +263,7 @@ function DraggableGroceryItem({
 
   return (
     <div className="relative overflow-hidden rounded-lg">
-      {/* Red delete action revealed behind the row by swiping left */}
+      {/* Delete action revealed behind the row by swiping left */}
       <button
         onClick={() => {
           setSwipeX(0);
@@ -271,7 +271,7 @@ function DraggableGroceryItem({
         }}
         tabIndex={swipeX === 0 ? -1 : 0}
         aria-hidden={swipeX === 0}
-        className={`absolute inset-y-0 right-0 w-24 bg-red-600 text-white text-sm font-medium flex items-center justify-center ${
+        className={`absolute inset-y-0 right-0 w-24 bg-destructive text-destructive-foreground text-sm font-medium flex items-center justify-center ${
           isDragging ? "hidden" : ""
         }`}
       >
@@ -287,7 +287,7 @@ function DraggableGroceryItem({
         onPointerCancel={handlePointerCancel}
         className={`
           relative flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer group select-none touch-pan-y
-          bg-white border-2 border-transparent shadow-md hover:shadow-lg
+          bg-card border border-border transition-colors active:bg-gray-50
           ${isDragging ? "opacity-0" : ""}
         `}
       >
@@ -332,7 +332,7 @@ function CheckedGroceryItem({
   return (
     <div
       onClick={onToggleBought}
-      className="flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer select-none bg-white/60 border-2 border-transparent"
+      className="flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer select-none active:bg-gray-50 transition-colors"
     >
       <CheckCircle bought />
       <span className="truncate w-full text-base min-w-0 first-letter:uppercase text-gray-400 line-through">
@@ -369,7 +369,7 @@ function UncategorizedItems({
         </span>
         <div
           className={`flex-1 rounded border-2 border-dashed transition-all ${
-            isOver ? "h-8 border-blue-400 bg-blue-100/70" : "h-2 border-gray-300"
+            isOver ? "h-8 border-primary bg-primary/10" : "h-2 border-gray-300"
           }`}
         />
       </div>
@@ -379,10 +379,8 @@ function UncategorizedItems({
   return (
     <div
       ref={setNodeRef}
-      className={`space-y-2 p-3 rounded-lg transition-colors ${
-        isDragActive && isOver
-          ? "bg-blue-100/60 ring-2 ring-blue-300"
-          : "bg-gray-50/30 border-2 border-dashed border-gray-200"
+      className={`space-y-2 rounded-lg p-2 -mx-2 transition-colors ${
+        isDragActive && isOver ? "bg-primary/5 ring-1 ring-primary/30" : ""
       }`}
     >
       {items.map((item) => (
@@ -426,22 +424,23 @@ function DroppableCategory({
   return (
     <div
       ref={setNodeRef}
-      className={`p-3 rounded-lg border transition-colors ${
-        isOver
-          ? "bg-blue-100/60 border-blue-300 ring-2 ring-blue-300"
-          : "bg-blue-50/30 border-blue-100"
-      } ${isEmpty ? "py-2" : "space-y-2"}`}
+      className={`rounded-lg p-2 -mx-2 transition-colors ${
+        isOver ? "bg-primary/5 ring-1 ring-primary/30" : ""
+      } ${isEmpty ? "" : "space-y-2"}`}
     >
-      <div className="flex items-center justify-between px-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-blue-900">{title}</h3>
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between px-0 pb-1.5">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+          <span className="ml-1.5 font-normal normal-case text-gray-300">{items.length}</span>
+        </h3>
+        <div className="flex items-center gap-0.5">
           {onAdd && (
             <Button
               variant="ghost"
               size="sm"
               onClick={onAdd}
               aria-label={`Item toevoegen aan ${title}`}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-blue-700"
+              className="h-7 w-7 p-0 text-gray-400 hover:text-primary"
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
@@ -452,7 +451,7 @@ function DroppableCategory({
               size="sm"
               onClick={onDelete}
               aria-label={`Categorie ${title} verwijderen`}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+              className="h-7 w-7 p-0 text-gray-400 hover:text-destructive"
             >
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -463,8 +462,8 @@ function DroppableCategory({
         // Compact empty category: just a thin dashed drop line under the
         // header that grows and highlights while a drag hovers it.
         <div
-          className={`mx-2 mt-1 rounded border-2 border-dashed transition-all ${
-            isOver ? "h-8 border-blue-400 bg-blue-100/70" : "h-2 border-blue-200"
+          className={`mt-1 rounded border-2 border-dashed transition-all ${
+            isOver ? "h-8 border-primary bg-primary/10" : "h-2 border-border"
           }`}
         />
       ) : (
@@ -503,17 +502,17 @@ function CheckedSection({
   if (items.length === 0) return null;
 
   return (
-    <div className="pt-2">
+    <div className="pt-2 border-t border-border">
       <button
         onClick={() => setIsOpen((open) => !open)}
-        className="flex items-center justify-between w-full min-h-11 px-2 py-2 text-sm font-semibold uppercase tracking-wide text-gray-500"
+        className="flex items-center justify-between w-full min-h-11 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500"
       >
         <span>Afgevinkt ({items.length})</span>
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {isOpen && (
-        <div className="space-y-2 mt-1">
+        <div className="space-y-1 mt-1">
           {items.map((item) => (
             <CheckedGroceryItem
               key={item.id}
@@ -525,7 +524,7 @@ function CheckedSection({
             variant="ghost"
             onClick={onClear}
             disabled={isClearing}
-            className="w-full h-11 mt-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="w-full h-11 mt-2 text-destructive hover:text-destructive hover:bg-destructive/10"
           >
             {isClearing && <Loader2 className="w-4 h-4 animate-spin" />}
             Wis afgevinkte items ({items.length})
@@ -659,7 +658,7 @@ export default function GroceryList({
     <div ref={listRef} className="w-full space-y-6">
       {isLoading && (
         <div className="flex items-center justify-center p-8 text-gray-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       )}
 
@@ -793,7 +792,7 @@ export default function GroceryList({
 
       <DragOverlay>
         {activeItem ? (
-          <div className="bg-white border-2 border-blue-500 shadow-2xl p-2.5 rounded-lg opacity-90">
+          <div className="bg-card border border-primary shadow-lg p-2.5 rounded-lg opacity-90">
             <span className="text-base font-medium first-letter:uppercase">{activeItem.name}</span>
           </div>
         ) : null}

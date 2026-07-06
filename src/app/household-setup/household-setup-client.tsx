@@ -78,96 +78,102 @@ export default function HouseholdSetupClient({ userId }: HouseholdSetupClientPro
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center p-4">
+    <div className="flex min-h-screen w-full items-center justify-center bg-background p-4">
       <div className="w-full max-w-2xl relative">
         <div className="absolute top-0 left-0">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => signOut()}
-            className="hover:bg-gray-100 active:bg-gray-200 active:scale-95 transition-all"
+            className="hover:bg-gray-100 active:bg-gray-200"
           >
             <LogOut className="w-5 h-5" />
           </Button>
         </div>
         <Card className="w-full">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold">
-              Stel je huishouden in
-            </CardTitle>
+            <CardTitle className="text-xl font-semibold">Stel je huishouden in</CardTitle>
             <CardDescription>
               Maak een nieuw huishouden aan of neem deel aan een bestaand huishouden om te beginnen
             </CardDescription>
           </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Create Household Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Nieuw huishouden maken</h3>
-            <form className="space-y-4" onSubmit={handleCreateHousehold}>
-              <div className="space-y-2">
-                <Label htmlFor="household-name">Huishoudnaam</Label>
-                <Input
-                  id="household-name"
-                  name="name"
-                  placeholder="Voer huishoudnaam in (bijv. Familie Jansen)"
-                  type="text"
-                  required
-                  disabled={isCreating}
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={isCreating}>
-                {isCreating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Aanmaken...
-                  </>
-                ) : (
-                  "Huishouden aanmaken"
-                )}
-              </Button>
-            </form>
-          </div>
-
-          <div className="relative">
-            <Separator />
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-              OF
+          <CardContent className="space-y-6">
+            {/* Create Household Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Nieuw huishouden maken
+              </h3>
+              <form className="space-y-4" onSubmit={handleCreateHousehold}>
+                <div className="space-y-2">
+                  <Label htmlFor="household-name">Huishoudnaam</Label>
+                  <Input
+                    id="household-name"
+                    name="name"
+                    placeholder="Voer huishoudnaam in (bijv. Familie Jansen)"
+                    type="text"
+                    required
+                    disabled={isCreating}
+                    className="h-12"
+                  />
+                </div>
+                <Button type="submit" className="w-full h-12" disabled={isCreating}>
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Aanmaken...
+                    </>
+                  ) : (
+                    "Huishouden aanmaken"
+                  )}
+                </Button>
+              </form>
             </div>
-          </div>
 
-          {/* Join Household Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Deelnemen aan bestaand huishouden</h3>
-            <form className="space-y-4" onSubmit={handleJoinHousehold}>
-              <div className="space-y-2">
-                <Label htmlFor="household-secret">Huishoudcode</Label>
-                <Input
-                  id="household-secret"
-                  name="secret"
-                  placeholder="Voer de huishoudcode in"
-                  type="text"
-                  required
-                  disabled={isJoining}
-                  className="font-mono uppercase"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Vraag de code aan een huishoudlid
-                </p>
+            <div className="relative">
+              <Separator />
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
+                OF
               </div>
-              <Button type="submit" variant="secondary" className="w-full" disabled={isJoining}>
-                {isJoining ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Deelnemen...
-                  </>
-                ) : (
-                  "Deelnemen"
-                )}
-              </Button>
-            </form>
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+
+            {/* Join Household Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Deelnemen aan bestaand huishouden
+              </h3>
+              <form className="space-y-4" onSubmit={handleJoinHousehold}>
+                <div className="space-y-2">
+                  <Label htmlFor="household-secret">Huishoudcode</Label>
+                  <Input
+                    id="household-secret"
+                    name="secret"
+                    placeholder="Voer de huishoudcode in"
+                    type="text"
+                    required
+                    disabled={isJoining}
+                    className="h-12 font-mono uppercase"
+                  />
+                  <p className="text-xs text-muted-foreground">Vraag de code aan een huishoudlid</p>
+                </div>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  className="w-full h-12"
+                  disabled={isJoining}
+                >
+                  {isJoining ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deelnemen...
+                    </>
+                  ) : (
+                    "Deelnemen"
+                  )}
+                </Button>
+              </form>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

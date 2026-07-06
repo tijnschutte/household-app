@@ -95,7 +95,7 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{household.name}</CardTitle>
+        <CardTitle className="text-xl font-semibold">{household.name}</CardTitle>
         <CardDescription>
           Deel de code hieronder om anderen uit te nodigen voor je huishouden
         </CardDescription>
@@ -118,12 +118,12 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
         <Separator />
         <div className="space-y-2">
           <Label htmlFor="secret">Huishoudcode</Label>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Input
               id="secret"
               value={household.secret || "N/A"}
               readOnly
-              className="font-mono text-lg font-semibold"
+              className="h-12 font-mono text-lg font-semibold"
             />
             <Button size="icon" variant="outline" onClick={copySecret} disabled={!household.secret}>
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}

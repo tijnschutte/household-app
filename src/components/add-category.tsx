@@ -54,7 +54,7 @@ export default function AddCategory({ showPersonal, onCategoryAdded }: AddCatego
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 active:scale-95 transition-all">
+        <Button variant="outline" size="sm" className="gap-2">
           <Plus className="h-4 w-4" />
           Categorie toevoegen
         </Button>
@@ -81,10 +81,15 @@ export default function AddCategory({ showPersonal, onCategoryAdded }: AddCatego
             </div>
           </div>
           <DialogFooter className="gap-3">
-            <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isCreating} className="active:scale-95 transition-all">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              disabled={isCreating}
+            >
               Annuleren
             </Button>
-            <Button type="submit" disabled={isCreating} className="active:scale-95 transition-all">
+            <Button type="submit" disabled={isCreating}>
               {isCreating ? "Aanmaken..." : "Categorie aanmaken"}
             </Button>
           </DialogFooter>

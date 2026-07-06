@@ -87,6 +87,7 @@ export default function SignUpForm() {
           maxLength={15}
           autoComplete="username"
           disabled={isPending}
+          className="h-12"
         />
       </div>
       <div className="space-y-2">
@@ -101,7 +102,7 @@ export default function SignUpForm() {
             maxLength={15}
             autoComplete="new-password"
             disabled={isPending}
-            className="pr-10"
+            className="h-12 pr-10"
           />
           <button
             type="button"
@@ -116,15 +117,11 @@ export default function SignUpForm() {
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
             tabIndex={-1}
           >
-            {showPassword ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
       </div>
-      <Button className="w-full" type="submit" disabled={isPending}>
+      <Button className="w-full h-12" type="submit" disabled={isPending}>
         {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registreren"}
       </Button>
     </form>

@@ -36,6 +36,56 @@ type HouseholdClientPageProps = {
   initialData: ViewData;
 };
 
+// Compact 2-segment control replacing the old footer toggle buttons: one
+// rounded track, a sliding active pill, icon + Dutch label per segment.
+// It's navigation (which list you're looking at), not an action, so it
+// lives under the header rather than competing with the add bar.
+function ViewToggle({
+  showPersonal,
+  onToggle,
+}: {
+  showPersonal: boolean;
+  onToggle: (personal: boolean) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Lijst weergave"
+      className="relative flex w-full rounded-lg bg-secondary p-1"
+    >
+      <span
+        aria-hidden
+        className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-card shadow-sm transition-transform duration-200 ease-out"
+        style={{ transform: showPersonal ? "translateX(100%)" : "translateX(0)" }}
+      />
+      <button
+        type="button"
+        role="tab"
+        aria-selected={!showPersonal}
+        onClick={() => onToggle(false)}
+        className={`relative z-10 flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors ${
+          !showPersonal ? "text-primary" : "text-muted-foreground"
+        }`}
+      >
+        <House className="w-4 h-4" />
+        Huishouden
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={showPersonal}
+        onClick={() => onToggle(true)}
+        className={`relative z-10 flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors ${
+          showPersonal ? "text-primary" : "text-muted-foreground"
+        }`}
+      >
+        <User className="w-4 h-4" />
+        Persoonlijk
+      </button>
+    </div>
+  );
+}
+
 export default function HouseholdClientPage({ household, initialData }: HouseholdClientPageProps) {
   // Both views are cached independently so toggling back and forth is instant
   // after the first visit. The household view is seeded server-side.
@@ -388,42 +438,48 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   };
 
   return (
-    <div className="h-full w-full flex flex-col bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header - Fixed at top */}
-      <header className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 w-full py-6 shadow-lg">
-        <div className="flex flex-row justify-center items-center relative px-4">
-          <div className="absolute left-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => signOut()}
-              className="text-white hover:bg-white/20 active:bg-white/30 active:scale-95 transition-all"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
-          </div>
-          <h2 className="text-2xl text-white font-bold tracking-wide drop-shadow-md">
-            {showPersonal ? "Persoonlijk" : household.name}
-          </h2>
-          <div className="absolute right-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              asChild
-              className="text-white hover:bg-white/20 active:bg-white/30 active:scale-95 transition-all"
-            >
-              <Link href="/household-info">
-                <Info className="w-5 h-5" />
-              </Link>
-            </Button>
-          </div>
+    <div className="h-full w-full flex flex-col">
+      {/* Header - Fixed at top, flat brand blue, no gradient/drop-shadow */}
+      <header className="relative flex h-14 w-full shrink-0 items-center justify-center bg-primary px-4">
+        <div className="absolute left-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => signOut()}
+            className="text-primary-foreground hover:bg-white/10 active:bg-white/20"
+          >
+            <LogOut className="w-5 h-5" />
+          </Button>
+        </div>
+        <h2 className="text-lg font-semibold tracking-wide text-primary-foreground">
+          {showPersonal ? "Persoonlijk" : household.name}
+        </h2>
+        <div className="absolute right-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="text-primary-foreground hover:bg-white/10 active:bg-white/20"
+          >
+            <Link href="/household-info">
+              <Info className="w-5 h-5" />
+            </Link>
+          </Button>
         </div>
       </header>
+
+      {/* Sub-header - list-view segmented control; navigation, not an action,
+          so it sits under the header rather than the footer. */}
+      <div className="w-full shrink-0 border-b border-border bg-background px-4 py-2">
+        <div className="w-full max-w-2xl mx-auto">
+          <ViewToggle showPersonal={showPersonal} onToggle={handleToggleView} />
+        </div>
+      </div>
 
       {/* Main scrollable content area */}
       <main
         ref={mainRef}
-        className="flex-1 overflow-y-auto w-full max-w-2xl mx-auto px-6 pt-6 pb-6"
+        className="flex-1 overflow-y-auto w-full max-w-2xl mx-auto px-4 pt-4 pb-6"
       >
         <div className="mb-4 flex justify-end">
           <AddCategory showPersonal={showPersonal} onCategoryAdded={() => fetchData(viewKey)} />
@@ -445,10 +501,11 @@ export default function HouseholdClientPage({ household, initialData }: Househol
         />
       </main>
 
-      {/* Footer - Fixed at bottom */}
-      <footer className="w-full bg-white/95 backdrop-blur-sm shadow-2xl border-t border-gray-200 px-4 pt-4 pb-6">
-        <div className="relative flex flex-row justify-center items-center gap-3 w-full max-w-2xl mx-auto px-2">
-          <div className="flex flex-1 min-w-0 items-center gap-1 h-12 bg-white rounded-md shadow-md border-2 border-gray-200 focus-within:border-blue-500 transition-colors pl-1.5">
+      {/* Footer - Fixed at bottom, add bar only. Safe-area aware for the iOS
+          home indicator. */}
+      <footer className="w-full shrink-0 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="relative flex flex-row justify-center items-center gap-2 w-full max-w-2xl mx-auto">
+          <div className="flex flex-1 min-w-0 items-center gap-1 h-12 bg-card rounded-lg border border-input focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/20 transition-colors pl-1.5">
             {/* Category chip: where the next added item lands. Sticky across
                 consecutive adds; resets when switching lists. */}
             <Select
@@ -459,7 +516,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
             >
               <SelectTrigger
                 aria-label="Categorie voor nieuwe items"
-                className="h-8 max-w-[45%] shrink-0 gap-1 rounded-md border-0 bg-gray-100 px-2.5 text-xs font-medium text-gray-600 shadow-none"
+                className="h-8 max-w-[45%] shrink-0 gap-1 rounded-md border-0 bg-secondary px-2.5 text-xs font-medium text-muted-foreground shadow-none"
               >
                 <Tag className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">
@@ -507,29 +564,9 @@ export default function HouseholdClientPage({ household, initialData }: Househol
               e.preventDefault();
               addItem();
             }}
-            className="h-12 w-12 shadow-md hover:shadow-lg active:scale-95 transition-all"
+            className="h-12 w-12 active:opacity-70"
           >
             <Plus />
-          </Button>
-        </div>
-        <div className="relative flex flex-row justify-center gap-3 pt-4 pb-2">
-          <Button
-            variant={!showPersonal ? "default" : "outline"}
-            size="lg"
-            onClick={() => handleToggleView(false)}
-            className="min-w-[120px] shadow-md hover:shadow-lg active:scale-95 transition-all gap-2"
-          >
-            <House className="w-4 h-4" />
-            Huishouden
-          </Button>
-          <Button
-            variant={showPersonal ? "default" : "outline"}
-            size="lg"
-            onClick={() => handleToggleView(true)}
-            className="min-w-[120px] shadow-md hover:shadow-lg active:scale-95 transition-all gap-2"
-          >
-            <User className="w-4 h-4" />
-            Persoonlijk
           </Button>
         </div>
       </footer>
