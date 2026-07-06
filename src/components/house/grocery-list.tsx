@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   Loader2,
+  Plus,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input";
@@ -37,6 +38,8 @@ type GroceryListProps = {
   onDragEnd: (groceryId: number, categoryId: number | null) => void;
   onDeleteCategory: (categoryId: number) => void;
   onRenameItem: (groceryId: number, newName: string) => void;
+  /** "+" on a category header: pre-target that category in the add bar and focus the input. */
+  onAddToCategory?: (categoryId: number) => void;
   onClearBought: () => void;
   isClearingBought?: boolean;
   showCategories?: boolean;
@@ -240,6 +243,7 @@ function DroppableCategory({
   onToggleBought,
   onDelete,
   onRenameItem,
+  onAdd,
   onItemEditingChange,
   isUncategorized = false,
 }: {
@@ -249,6 +253,7 @@ function DroppableCategory({
   onToggleBought: (id: number) => void;
   onDelete?: () => void;
   onRenameItem: (groceryId: number, newName: string) => void;
+  onAdd?: () => void;
   onItemEditingChange?: (id: number, editing: boolean) => void;
   isUncategorized?: boolean;
 }) {
@@ -269,16 +274,29 @@ function DroppableCategory({
         >
           {title}
         </h3>
-        {onDelete && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onDelete}
-            className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {onAdd && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAdd}
+              aria-label={`Item toevoegen aan ${title}`}
+              className="h-6 w-6 p-0 text-gray-400 hover:text-blue-700"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
       </div>
       <div className="space-y-2">
         {items.length === 0 ? (
@@ -358,6 +376,7 @@ export default function GroceryList({
   onDragEnd,
   onDeleteCategory,
   onRenameItem,
+  onAddToCategory,
   onClearBought,
   isClearingBought = false,
   showCategories = true,
@@ -482,6 +501,7 @@ export default function GroceryList({
                 onToggleBought={(id) => onToggleBought(id, true)}
                 onDelete={() => onDeleteCategory(category.id)}
                 onRenameItem={onRenameItem}
+                onAdd={onAddToCategory ? () => onAddToCategory(category.id) : undefined}
                 onItemEditingChange={handleItemEditingChange}
               />
             ))}

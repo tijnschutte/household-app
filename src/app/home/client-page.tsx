@@ -2,10 +2,11 @@
 
 import { Grocery, Household, Category } from "@prisma/client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { User, House, Plus, Info, LogOut } from "lucide-react";
+import { User, House, Plus, Info, LogOut, Tag } from "lucide-react";
 import { getHomeData } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/src/components/ui/select";
 import {
   createGroceryItem,
   deleteItems,
@@ -45,6 +46,9 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   const [showPersonal, setShowPersonal] = useState(false);
   const [itemName, setItemName] = useState("");
   const [isClearingBought, setIsClearingBought] = useState(false);
+  // The category new items land in ("quick add with category"). Sticky across
+  // consecutive adds; reset to "Geen categorie" (null) when switching lists.
+  const [targetCategoryId, setTargetCategoryId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // The <main> element is the actual scrolling container (overflow-y-auto);
   // scrolled to bottom only after the current user adds an item.
@@ -61,6 +65,10 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   const groceryList = currentView?.items ?? [];
   const categories = currentView?.categories ?? [];
   const isLoading = currentView === null;
+  // Resolved against the visible view's categories, so a category that was
+  // deleted (locally or by a poll refresh) silently falls back to
+  // "Geen categorie" instead of pointing at a stale id.
+  const targetCategory = categories.find((c) => c.id === targetCategoryId) ?? null;
 
   const fetchData = useCallback(async (view: ViewKey, options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -103,6 +111,9 @@ export default function HouseholdClientPage({ household, initialData }: Househol
 
   const handleToggleView = (personal: boolean) => {
     setShowPersonal(personal);
+    // The target category belongs to the previously visible list; the other
+    // list has its own categories, so reset to "Geen categorie".
+    setTargetCategoryId(null);
     const key: ViewKey = personal ? "personal" : "household";
     if (dataByView[key] === null) {
       fetchData(key);
@@ -196,9 +207,16 @@ export default function HouseholdClientPage({ household, initialData }: Househol
       return;
     }
 
+    // Snapshot the resolved target category now, so a mid-flight chip change
+    // or category deletion can't make the optimistic item and the server row
+    // disagree about where the item landed.
+    const addCategory = targetCategory;
+
     // Optimistic insert: a temp item (negative id) appears immediately, the
     // input clears and stays enabled so the user can keep typing the next
     // item, and we reconcile with (or roll back to) the server afterwards.
+    // The temp item carries the chosen category so it renders inside that
+    // category's group right away.
     const tempId = tempIdRef.current--;
     const optimisticItem: GroceryWithCategory = {
       id: tempId,
@@ -207,8 +225,8 @@ export default function HouseholdClientPage({ household, initialData }: Househol
       bought: false,
       householdId: showPersonal ? null : household.id,
       userId: null,
-      categoryId: null,
-      category: null,
+      categoryId: addCategory?.id ?? null,
+      category: addCategory,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -226,11 +244,11 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     });
 
     try {
-      const newItem = await createGroceryItem(trimmedName, showPersonal);
+      const newItem = await createGroceryItem(trimmedName, showPersonal, addCategory?.id ?? null);
       updateView(viewKey, (data) => ({
         ...data,
         items: data.items.map((item) =>
-          item.id === tempId ? { ...newItem, category: null } : item
+          item.id === tempId ? { ...newItem, category: addCategory } : item
         ),
       }));
     } catch (error) {
@@ -299,6 +317,13 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     }
   };
 
+  // "+" on a category section header: pre-target that category in the add-bar
+  // chip and focus the one shared input (no per-category inputs).
+  const handleAddToCategory = (categoryId: number) => {
+    setTargetCategoryId(categoryId);
+    inputRef.current?.focus();
+  };
+
   const handleRenameItem = async (groceryId: number, newName: string) => {
     try {
       await updateGroceryName(groceryId, newName);
@@ -364,6 +389,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           onDragEnd={handleDragEnd}
           onDeleteCategory={handleDeleteCategory}
           onRenameItem={handleRenameItem}
+          onAddToCategory={handleAddToCategory}
           onClearBought={handleClearBought}
           isClearingBought={isClearingBought}
           showCategories={true}
@@ -374,20 +400,55 @@ export default function HouseholdClientPage({ household, initialData }: Househol
       {/* Footer - Fixed at bottom */}
       <footer className="w-full bg-white/95 backdrop-blur-sm shadow-2xl border-t border-gray-200 px-4 pt-4 pb-6">
         <div className="relative flex flex-row justify-center items-center gap-3 w-full max-w-2xl mx-auto px-2">
-          <Input
-            ref={inputRef}
-            className="bg-white shadow-md border-2 border-gray-200 focus:border-blue-500 transition-colors h-12 text-base"
-            placeholder="Voeg een item toe..."
-            value={itemName}
-            maxLength={30}
-            onChange={(e) => setItemName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addItem();
+          <div className="flex flex-1 min-w-0 items-center gap-1 h-12 bg-white rounded-md shadow-md border-2 border-gray-200 focus-within:border-blue-500 transition-colors pl-1.5">
+            {/* Category chip: where the next added item lands. Sticky across
+                consecutive adds; resets when switching lists. */}
+            <Select
+              value={targetCategory ? String(targetCategory.id) : "none"}
+              onValueChange={(value) =>
+                setTargetCategoryId(value === "none" ? null : Number(value))
               }
-            }}
-          />
+            >
+              <SelectTrigger
+                aria-label="Categorie voor nieuwe items"
+                className="h-8 max-w-[45%] shrink-0 gap-1 rounded-md border-0 bg-gray-100 px-2.5 text-xs font-medium text-gray-600 shadow-none"
+              >
+                <Tag className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  {targetCategory ? targetCategory.name : "Geen categorie"}
+                </span>
+              </SelectTrigger>
+              <SelectContent
+                onCloseAutoFocus={(e) => {
+                  // After picking a category, put the caret straight back in
+                  // the item input so the user can type the item name.
+                  e.preventDefault();
+                  inputRef.current?.focus();
+                }}
+              >
+                <SelectItem value="none">Geen categorie</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={String(category.id)}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              ref={inputRef}
+              className="flex-1 min-w-0 h-full border-0 shadow-none bg-transparent px-2 text-base focus-visible:ring-0 focus-visible:ring-offset-0"
+              placeholder="Voeg een item toe..."
+              value={itemName}
+              maxLength={30}
+              onChange={(e) => setItemName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addItem();
+                }
+              }}
+            />
+          </div>
           <Button
             size="icon"
             onMouseDown={(e) => {

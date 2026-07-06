@@ -12,6 +12,7 @@ Implementation-ready plan for improving the household grocery app. Written for i
 - **Conventions**: server actions in `src/lib/actions.ts` (mutations) and `src/lib/data.ts` (reads); form-based actions return `{success, message}` via `executeAction()`; Zod schemas in `src/lib/schema.ts` with Dutch messages; shadcn/ui components in `src/components/ui/`.
 - **Schema changes**: see the Local dev DB bullet above (migrate diff + deploy). Only WP-1 touches the schema.
 - **Do not add new dependencies** unless a WP explicitly says so. Everything needed (dnd-kit, sonner, zod, shadcn primitives) is installed.
+- **shadcn/ui first**: build all standard controls (buttons, inputs, dialogs, popovers, dropdowns, tooltips, skeletons) from `src/components/ui/`. If a needed primitive is missing there, add it with `bunx shadcn@latest add <component>` (this is the one allowed dependency exception) instead of hand-rolling floating/overlay/focus behavior. Bespoke Tailwind is fine only for things shadcn has no primitive for (list rows, drag layers, segmented control).
 - The uncommitted polling-sync code in `src/app/home/client-page.tsx` (10s interval + refetch on tab focus) is part of the baseline — keep that behavior working through every refactor.
 
 ## Target interaction model (decided)

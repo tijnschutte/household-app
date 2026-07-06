@@ -52,7 +52,11 @@ export const findHomeByUserId = async (userId: number | undefined) => {
   }
 };
 
-export async function createGroceryItem(name: string, personal: boolean) {
+export async function createGroceryItem(
+  name: string,
+  personal: boolean,
+  categoryId?: number | null
+) {
   try {
     const { userId, householdId } = await requireUser();
 
@@ -63,10 +67,25 @@ export async function createGroceryItem(name: string, personal: boolean) {
     const validated = groceryItemSchema.parse({ name });
     const itemName = validated.name.trim().toLowerCase();
 
+    // The target category must belong to the exact same list the item is
+    // created in (personal ↔ user-owned, shared ↔ household-owned), so a
+    // client can't link an item into another household's/user's category.
+    const targetCategoryId = categoryId ?? null;
+    if (targetCategoryId !== null) {
+      const category = await prisma.category.findFirst({
+        where: personal
+          ? { id: targetCategoryId, userId, householdId: null }
+          : { id: targetCategoryId, householdId },
+      });
+      if (!category) {
+        throw new Error("Categorie niet gevonden");
+      }
+    }
+
     const groceryItem = await prisma.grocery.create({
       data: personal
-        ? { name: itemName, userId, householdId: null }
-        : { name: itemName, householdId, userId: null },
+        ? { name: itemName, userId, householdId: null, categoryId: targetCategoryId }
+        : { name: itemName, householdId, userId: null, categoryId: targetCategoryId },
     });
     return groceryItem;
   } catch (error) {
