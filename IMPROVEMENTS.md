@@ -5,6 +5,7 @@ Implementation-ready plan for improving the household grocery app. Written for i
 ## Ground rules for implementing agents
 
 - **Package manager**: `bun` (lockfile `bun.lock`; do not reintroduce pnpm). Dev server: `bun run dev`. Verify every WP with `bun run build` (must pass) and by exercising the flow in the running app.
+- **Also run before finishing**: `bun run typecheck` and `bun run lint` — a husky pre-commit hook (lint-staged/Prettier + typecheck + ESLint) blocks any commit that fails them.
 - **Local dev DB**: Postgres runs in Docker (`bun run db:up`, defined in `docker-compose.yml`), `DATABASE_URL` in `.env` points at it. Seed with `bun run db:seed` → user `Tijn` / password `password`, household `CD26`. Migrations: `bunx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel src/lib/db/schema.prisma --script` into a new folder under `src/lib/db/migrations/`, then `bunx prisma migrate deploy` (plain `prisma migrate dev` fails in non-interactive shells). Never point `DATABASE_URL` at the Neon URL commented in `.env`.
 - **UI language is Dutch** — all user-facing strings, including new toasts and empty states. Code, comments, and identifiers in English.
 - **Mobile-first**: this app is used as a PWA on phones. Test at ~390px viewport width. Touch targets ≥ 44px. Desktop just needs to not break (max-w-2xl centered layout).
@@ -30,9 +31,10 @@ These change data flow and action signatures that later WPs build on.
 **Files**: `src/lib/actions.ts`, `src/lib/data.ts`, `src/lib/auth.ts` (read-only), `src/app/home/page.tsx`, `src/lib/db/schema.prisma`, delete dead files.
 
 **Changes**:
+
 1. Add a helper in `src/lib/actions.ts` (or a new `src/lib/session.ts`):
    ```ts
-   async function requireUser(): Promise<{ userId: number; householdId: number | null }>
+   async function requireUser(): Promise<{ userId: number; householdId: number | null }>;
    ```
    It calls `auth()`, throws `Error("Niet ingelogd")` if no session, and loads the user's `householdId` from the DB (do not trust a client-passed householdId anywhere).
 2. Change action signatures to derive scope from the session instead of parameters:
@@ -55,6 +57,7 @@ These change data flow and action signatures that later WPs build on.
 **Files**: `src/app/home/page.tsx`, `src/app/home/client-page.tsx`, `src/app/home/loading.tsx` (new), `src/lib/data.ts`.
 
 **Changes**:
+
 1. Add one combined read in `data.ts`: `getHomeData(personal: boolean)` returning `{ items, categories }` (single function, two parallel Prisma queries). Use it everywhere instead of separate `getGroceryList`/`getCategories` calls; delete the separate exports if nothing else uses them.
 2. In `home/page.tsx` (server component), fetch household data for the default view (`personal = false`) and pass it as `initialData` to the client page.
 3. In `client-page.tsx`: initialize state from `initialData`; skip the initial client fetch for the household view. Fetch on demand when toggling to Persoonlijk (and cache both lists in state so toggling back is instant — keep two state slots keyed by view, refresh the visible one via polling).
@@ -68,11 +71,12 @@ These change data flow and action signatures that later WPs build on.
 **Files**: `src/app/home/client-page.tsx`, `src/components/house/grocery-list.tsx`.
 
 **Changes**:
+
 1. **Selection persists across list switch** (wishlist item): clear the checked-selection/edit state whenever `showPersonal` changes. (After WP-4 the selection set is gone, but fix it now so it can land independently.)
 2. **Auto-scroll**: currently scrolls to bottom on every `groceryList.length` change — including deletes and poll updates. Only scroll (smoothly) after the current user adds an item; never on delete or poll refresh. Simplest: scroll in `addItem` after the optimistic insert, remove the `useEffect` on `length`.
 3. **Add is not optimistic**: `addItem` awaits the server before showing the item and locks the input (`readOnly` while pending). Make it optimistic: insert a temp item (negative temp id), clear the input immediately, keep it enabled so the user can type the next item, reconcile with the server response (replace temp id) or remove + error-toast on failure. Drop the success toast on add — the item appearing is feedback enough (keep error toasts).
 4. Remove the success toast on drag-to-category too ("Item verplaatst…") — moving is visible; toasts on every routine action train users to ignore them. Keep error toasts everywhere.
-5. **`isMounted` gate hides SSR content** (found during WP-2): `grocery-list.tsx` renders a spinner until a client `useEffect` fires (dnd-kit SSR/hydration guard), so the server-rendered list data is invisible until hydration — negating part of WP-2's fast first paint. Fix: render the list content (rows, categories) on the server without the `DndContext` wrapper, and only gate the *drag layer* on mount — e.g. `isMounted ? <DndContext>…{content}…</DndContext> : content`. The items must be visible in pre-hydration HTML.
+5. **`isMounted` gate hides SSR content** (found during WP-2): `grocery-list.tsx` renders a spinner until a client `useEffect` fires (dnd-kit SSR/hydration guard), so the server-rendered list data is invisible until hydration — negating part of WP-2's fast first paint. Fix: render the list content (rows, categories) on the server without the `DndContext` wrapper, and only gate the _drag layer_ on mount — e.g. `isMounted ? <DndContext>…{content}…</DndContext> : content`. The items must be visible in pre-hydration HTML.
 
 **Acceptance**: switch lists with items selected → nothing stays selected; deleting an item doesn't scroll; adding 3 items rapid-fire works without waiting; no success-toast spam on add/move.
 
@@ -87,6 +91,7 @@ These change data flow and action signatures that later WPs build on.
 **Files**: `src/app/home/client-page.tsx`, `src/components/house/grocery-list.tsx`, `src/lib/actions.ts`.
 
 **Spec**:
+
 1. **Row anatomy** (one row = one clear affordance each):
    - Leading: round checkbox circle (visual, ~24px, whole row is the tap target for toggling).
    - Middle: item name (truncated, `first-letter:uppercase`).
@@ -107,8 +112,9 @@ These change data flow and action signatures that later WPs build on.
 **Files**: `src/app/home/client-page.tsx`, `src/components/house/grocery-list.tsx`, `src/lib/actions.ts`.
 
 **Spec**:
+
 1. Extend `createGroceryItem(name, personal, categoryId?: number | null)` — validate the category belongs to the same scope (household/user) server-side.
-2. **Add-bar category chip**: left inside the footer input row, a small chip/select showing the target category (default: `Geen categorie`). Tapping it opens a compact popover/sheet listing categories (use the existing `Select` or a simple popover of buttons — whatever reads cleanest on mobile). The choice is *sticky* for consecutive adds and resets to Geen categorie when switching lists.
+2. **Add-bar category chip**: left inside the footer input row, a small chip/select showing the target category (default: `Geen categorie`). Tapping it opens a compact popover/sheet listing categories (use the existing `Select` or a simple popover of buttons — whatever reads cleanest on mobile). The choice is _sticky_ for consecutive adds and resets to Geen categorie when switching lists.
 3. **Inline add per category** (wishlist): each category section header gets a small `+` ghost button; tapping it focuses the footer input **with that category pre-selected in the chip** (don't build N inline inputs — one input, pre-targeted, keeps the DOM and focus handling simple).
 4. Optimistic insert (from WP-3) must place the temp item inside the chosen category group.
 
@@ -121,6 +127,7 @@ These change data flow and action signatures that later WPs build on.
 **Files**: `src/components/house/grocery-list.tsx`.
 
 **Spec**:
+
 1. **Empty categories**: render as a single compact row — category name + `+` button + thin dashed drop-zone line underneath (~8px tall, expands with a highlight while a drag is over it via `useDroppable`'s `isOver`). No more tall empty boxes with italic placeholder text. Same for the uncategorized zone: render it only while a drag is active or when it has items; when it appears as a drop target during drag, it's a thin labeled line.
 2. **Drop-target feedback**: while dragging, the hovered category gets a visible highlight (`isOver` → ring/background change). Currently there is none.
 3. **Category delete confirmation**: deleting a category currently fires instantly from a tiny trash icon. Wrap in the existing `AlertDialog` ("Categorie verwijderen? Items blijven bestaan en worden ongecategoriseerd.") — only when the category has items; empty categories delete immediately.
@@ -137,11 +144,12 @@ These change data flow and action signatures that later WPs build on.
 
 **Problem**: The current look is noisy — a heavy blue gradient header, shadows on every element, `active:scale-95` everywhere, two large footer buttons for the list toggle, and gradient page background. It reads as assembled rather than designed. The auth pages, setup page, and info page each improvised their own layout, so nothing feels like one app.
 
-**Scope**: every screen — home, sign-in, sign-up, household-setup, household-info. Define the design language once and apply it everywhere in this WP; WP-8/WP-9 then only change *content/structure* on their pages, inheriting this style.
+**Scope**: every screen — home, sign-in, sign-up, household-setup, household-info. Define the design language once and apply it everywhere in this WP; WP-8/WP-9 then only change _content/structure_ on their pages, inheriting this style.
 
 **Files**: `src/app/home/client-page.tsx`, `src/components/house/grocery-list.tsx`, `src/app/globals.css`, `src/app/layout.tsx`, `src/components/auth/sign-in-form.tsx`, `src/components/auth/sign-up-form.tsx`, `src/app/(auth)/sign-in/page.tsx`, `src/app/(auth)/sign-up/page.tsx`, `src/app/household-setup/household-setup-client.tsx`, `src/components/household-info.tsx`, `src/app/household-info/page.tsx`, `src/app/home/loading.tsx`.
 
 **Spec** (calmer, flatter, content-first — read the `frontend-design` skill before implementing this WP if available):
+
 1. **Header**: single flat brand color (keep the existing deep blue family, e.g. `bg-blue-900`) or plain white with a bottom border; drop the gradient and `drop-shadow` on the title. Height ≤ 56px. Title centered, sign-out left, info right (unchanged positions).
 2. **List toggle → segmented control**: replace the two large footer buttons with a compact 2-segment control (one rounded container, sliding active pill, `House`/`User` icons + labels). Put it in the header area or directly under it — it's navigation, not an action, and shouldn't compete with the add bar. Footer keeps only the add bar.
 3. **Cards/rows**: items become flat rows with a hairline separator or very subtle border (`border-gray-200`), no per-row shadow, no hover scale. Category headers: small-caps label + item count, no tinted background boxes — whitespace and a hairline are enough structure.
@@ -163,6 +171,7 @@ These change data flow and action signatures that later WPs build on.
 **Files**: `src/lib/data.ts`, `src/components/household-info.tsx`, `src/app/household-info/page.tsx`.
 
 **Spec**:
+
 1. `getHouseholdById` → extend (or add `getHouseholdWithMembers`) to `include: { members: { select: { id, name } } }`.
 2. **Members section** in the card: `Leden (n)` list — avatar circle with first letter, name, and a `jij`-badge on the current user. Above the secret-code block.
 3. **Share button**: next to copy, a share button using `navigator.share({ text: \`Doe mee met "${name}" in Mandje met code ${secret}\` })` when available, hidden otherwise (feature-detect).
@@ -179,6 +188,7 @@ These change data flow and action signatures that later WPs build on.
 **Files**: `src/app/household-setup/household-setup-client.tsx`, `src/app/household-setup/page.tsx`, `src/lib/actions.ts` (validation only).
 
 **Spec**:
+
 1. **One choice, then one form**: replace the stacked forms with a 2-tab segmented control (`Nieuw huishouden` / `Deelnemen`) above a single card body showing only the active form. Default tab: Deelnemen if the app ever knows an invite context, otherwise Nieuw. Both submit buttons become full-width primary (blue) — the active tab already disambiguates, so no washed-out secondary variant.
 2. **Copy**: title stays; shorten the subtitle to one line ("Maak een huishouden aan of doe mee met een bestaand huishouden."). Placeholder for the code: `bijv. A1B2C3D4E5F6` (normal casing, not screaming); keep `font-mono uppercase` styling on typed input and normalize casing client-side before submit.
 3. **Code input ergonomics**: `autoCapitalize="characters"`, `autoComplete="off"`, `spellCheck={false}`, `inputMode="text"`, max length 12, trim on submit. Show the inline Zod-style error under the field instead of only a toast when the code is invalid.
@@ -202,17 +212,17 @@ WP-4/5/6/7 all edit `client-page.tsx` and `grocery-list.tsx` — do **not** run 
 
 ## Wishlist coverage (from the original version of this file)
 
-| Original item | Covered by |
-|---|---|
-| Real-time sync between household members | Baseline polling, hardened in WP-2 (+ bought-state sync in WP-4) |
-| Inline "add" button per category section | WP-5 |
-| Swipe to delete | WP-6 |
-| Delete button persisting across list switch | WP-3 (obsoleted by WP-4) |
-| Empty categories as thin drop-target line | WP-6 |
-| Type "melk" and optionally pick a category | WP-5 |
-| Show members on info page | WP-8 |
-| Faster app startup | WP-2 |
-| Dragging/clicking/editing is a lot on one item | WP-4 |
+| Original item                                  | Covered by                                                       |
+| ---------------------------------------------- | ---------------------------------------------------------------- |
+| Real-time sync between household members       | Baseline polling, hardened in WP-2 (+ bought-state sync in WP-4) |
+| Inline "add" button per category section       | WP-5                                                             |
+| Swipe to delete                                | WP-6                                                             |
+| Delete button persisting across list switch    | WP-3 (obsoleted by WP-4)                                         |
+| Empty categories as thin drop-target line      | WP-6                                                             |
+| Type "melk" and optionally pick a category     | WP-5                                                             |
+| Show members on info page                      | WP-8                                                             |
+| Faster app startup                             | WP-2                                                             |
+| Dragging/clicking/editing is a lot on one item | WP-4                                                             |
 
 ## Final verification checklist (after all WPs)
 

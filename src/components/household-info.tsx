@@ -86,17 +86,8 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
               readOnly
               className="font-mono text-lg font-semibold"
             />
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={copySecret}
-              disabled={!household.secret}
-            >
-              {copied ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
+            <Button size="icon" variant="outline" onClick={copySecret} disabled={!household.secret}>
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -117,12 +108,16 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
             <AlertDialogHeader>
               <AlertDialogTitle>Weet je het zeker?</AlertDialogTitle>
               <AlertDialogDescription>
-                Dit verwijdert je uit "{household.name}". Je kunt later opnieuw deelnemen met de huishoudcode.
+                Dit verwijdert je uit &quot;{household.name}&quot;. Je kunt later opnieuw deelnemen
+                met de huishoudcode.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Annuleren</AlertDialogCancel>
-              <AlertDialogAction onClick={handleLeaveHousehold} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <AlertDialogAction
+                onClick={handleLeaveHousehold}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
                 Huishouden verlaten
               </AlertDialogAction>
             </AlertDialogFooter>
