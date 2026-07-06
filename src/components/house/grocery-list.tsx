@@ -65,11 +65,11 @@ function CheckCircle({ bought }: { bought: boolean }) {
   return (
     <div
       className={`
-        w-6 h-6 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition-colors
+        h-[22px] w-[22px] flex-shrink-0 rounded-full border-[1.5px] flex items-center justify-center transition-colors
         ${bought ? "bg-primary border-primary" : "border-gray-300"}
       `}
     >
-      {bought && <Check className="w-4 h-4 text-primary-foreground" strokeWidth={3} />}
+      {bought && <Check className="w-3.5 h-3.5 text-primary-foreground" strokeWidth={3} />}
     </div>
   );
 }
@@ -246,8 +246,8 @@ function DraggableGroceryItem({
 
   if (isEditing) {
     return (
-      <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-card border border-primary">
-        <div className="w-6 h-6 flex-shrink-0" />
+      <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-white ring-1 ring-primary">
+        <div className="h-[22px] w-[22px] flex-shrink-0" />
         <Input
           ref={inputRef}
           value={editValue}
@@ -263,7 +263,10 @@ function DraggableGroceryItem({
 
   return (
     <div className="relative overflow-hidden rounded-lg">
-      {/* Delete action revealed behind the row by swiping left */}
+      {/* Delete action revealed behind the row by swiping left. Kept
+          `invisible` (not just covered) while the row is at rest so it can
+          never bleed through the row, whatever the browser does with
+          stacking/paint of the translated row above it. */}
       <button
         onClick={() => {
           setSwipeX(0);
@@ -273,7 +276,7 @@ function DraggableGroceryItem({
         aria-hidden={swipeX === 0}
         className={`absolute inset-y-0 right-0 w-24 bg-destructive text-destructive-foreground text-sm font-medium flex items-center justify-center ${
           isDragging ? "hidden" : ""
-        }`}
+        } ${swipeX === 0 && !isSwiping ? "invisible" : ""}`}
       >
         Verwijderen
       </button>
@@ -287,7 +290,7 @@ function DraggableGroceryItem({
         onPointerCancel={handlePointerCancel}
         className={`
           relative flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer group select-none touch-pan-y
-          bg-card border border-border transition-colors active:bg-gray-50
+          bg-white transition-colors active:bg-gray-100
           ${isDragging ? "opacity-0" : ""}
         `}
       >
@@ -363,13 +366,13 @@ function UncategorizedItems({
   // drop line, not a tall empty box.
   if (items.length === 0) {
     return (
-      <div ref={setNodeRef} className="flex items-center gap-2 px-2">
+      <div ref={setNodeRef} className="flex items-center gap-2 px-1 py-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 shrink-0">
           Geen categorie
         </span>
         <div
-          className={`flex-1 rounded border-2 border-dashed transition-all ${
-            isOver ? "h-8 border-primary bg-primary/10" : "h-2 border-gray-300"
+          className={`flex-1 rounded border border-dashed transition-all ${
+            isOver ? "h-8 border-primary bg-primary/10" : "h-1.5 border-gray-300"
           }`}
         />
       </div>
@@ -377,11 +380,11 @@ function UncategorizedItems({
   }
 
   return (
+    // No border-radius here: this element carries the divide-y hairline, and
+    // a radius would make the divider curve up at its ends (ghost-row look).
     <div
       ref={setNodeRef}
-      className={`space-y-2 rounded-lg p-2 -mx-2 transition-colors ${
-        isDragActive && isOver ? "bg-primary/5 ring-1 ring-primary/30" : ""
-      }`}
+      className={`space-y-1 py-3 transition-colors ${isDragActive && isOver ? "bg-primary/5" : ""}`}
     >
       {items.map((item) => (
         <DraggableGroceryItem
@@ -422,16 +425,13 @@ function DroppableCategory({
   const isEmpty = items.length === 0;
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`rounded-lg p-2 -mx-2 transition-colors ${
-        isOver ? "bg-primary/5 ring-1 ring-primary/30" : ""
-      } ${isEmpty ? "" : "space-y-2"}`}
-    >
-      <div className="flex items-center justify-between px-0 pb-1.5">
+    // No border-radius here: this element carries the divide-y hairline, and
+    // a radius would make the divider curve up at its ends (ghost-row look).
+    <div ref={setNodeRef} className={`py-3 transition-colors ${isOver ? "bg-primary/5" : ""}`}>
+      <div className="flex items-center justify-between px-1 pb-1.5">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
-          <span className="ml-1.5 font-normal normal-case text-gray-300">{items.length}</span>
+          <span className="ml-1.5 font-normal normal-case text-gray-400">{items.length}</span>
         </h3>
         <div className="flex items-center gap-0.5">
           {onAdd && (
@@ -462,12 +462,12 @@ function DroppableCategory({
         // Compact empty category: just a thin dashed drop line under the
         // header that grows and highlights while a drag hovers it.
         <div
-          className={`mt-1 rounded border-2 border-dashed transition-all ${
-            isOver ? "h-8 border-primary bg-primary/10" : "h-2 border-border"
+          className={`mx-1 mt-1 rounded border border-dashed transition-all ${
+            isOver ? "h-8 border-primary bg-primary/10" : "h-1.5 border-gray-300"
           }`}
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1">
           {items.map((item) => (
             <DraggableGroceryItem
               key={item.id}
@@ -502,10 +502,10 @@ function CheckedSection({
   if (items.length === 0) return null;
 
   return (
-    <div className="pt-2 border-t border-border">
+    <div className="py-2">
       <button
         onClick={() => setIsOpen((open) => !open)}
-        className="flex items-center justify-between w-full min-h-11 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500"
+        className="flex items-center justify-between w-full min-h-11 px-1 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500"
       >
         <span>Afgevinkt ({items.length})</span>
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -655,7 +655,7 @@ export default function GroceryList({
 
   // Render list content (common for both draggable and non-draggable modes)
   const renderContent = () => (
-    <div ref={listRef} className="w-full space-y-6">
+    <div ref={listRef} className="w-full">
       {isLoading && (
         <div className="flex items-center justify-center p-8 text-gray-500">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -674,7 +674,10 @@ export default function GroceryList({
         )}
 
       {!isLoading && (
-        <>
+        // Groups (categories, uncategorized, checked) are flat: a small-caps
+        // label, plain rows under it, and a single hairline between groups
+        // supplied by divide-y here — no boxes-in-boxes.
+        <div className="divide-y divide-gray-200">
           {/* Categorized Sections - Show all categories, even empty ones */}
           {showCategories &&
             categorizedItems.map(({ category, items }) => (
@@ -707,7 +710,7 @@ export default function GroceryList({
 
           {/* Simple list when categories are disabled */}
           {!showCategories && uncategorizedItems.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-1 py-3">
               {uncategorizedItems.map((item) => (
                 <DraggableGroceryItem
                   key={item.id}
@@ -727,7 +730,7 @@ export default function GroceryList({
             onClear={onClearBought}
             isClearing={isClearingBought}
           />
-        </>
+        </div>
       )}
 
       {/* Confirmation for deleting a category that still has items */}
@@ -792,7 +795,7 @@ export default function GroceryList({
 
       <DragOverlay>
         {activeItem ? (
-          <div className="bg-card border border-primary shadow-lg p-2.5 rounded-lg opacity-90">
+          <div className="bg-white border border-primary shadow-lg p-2.5 rounded-lg opacity-90">
             <span className="text-base font-medium first-letter:uppercase">{activeItem.name}</span>
           </div>
         ) : null}

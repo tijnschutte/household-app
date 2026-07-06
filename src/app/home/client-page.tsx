@@ -439,33 +439,32 @@ export default function HouseholdClientPage({ household, initialData }: Househol
 
   return (
     <div className="h-full w-full flex flex-col">
-      {/* Header - Fixed at top, flat brand blue, no gradient/drop-shadow */}
-      <header className="relative flex h-14 w-full shrink-0 items-center justify-center bg-primary px-4">
-        <div className="absolute left-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => signOut()}
-            className="text-primary-foreground hover:bg-white/10 active:bg-white/20"
-          >
-            <LogOut className="w-5 h-5" />
-          </Button>
-        </div>
-        <h2 className="text-lg font-semibold tracking-wide text-primary-foreground">
+      {/* Header - Fixed at top, flat brand blue, no gradient/drop-shadow.
+          Plain flex row (no absolutely-positioned children) so the title can
+          never overlap the side buttons; both sides are equal-width icon
+          buttons, so the title stays visually centered and truncates. */}
+      <header className="flex h-14 w-full shrink-0 items-center bg-primary px-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => signOut()}
+          className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
+        >
+          <LogOut className="w-5 h-5" />
+        </Button>
+        <h2 className="min-w-0 flex-1 truncate text-center text-lg font-semibold tracking-wide text-primary-foreground">
           {showPersonal ? "Persoonlijk" : household.name}
         </h2>
-        <div className="absolute right-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            asChild
-            className="text-primary-foreground hover:bg-white/10 active:bg-white/20"
-          >
-            <Link href="/household-info">
-              <Info className="w-5 h-5" />
-            </Link>
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          asChild
+          className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
+        >
+          <Link href="/household-info">
+            <Info className="w-5 h-5" />
+          </Link>
+        </Button>
       </header>
 
       {/* Sub-header - list-view segmented control; navigation, not an action,
@@ -514,14 +513,19 @@ export default function HouseholdClientPage({ household, initialData }: Househol
                 setTargetCategoryId(value === "none" ? null : Number(value))
               }
             >
+              {/* Compact chip: icon + chevron only while no category is
+                  targeted; a short truncated name (max 35% of the bar) once
+                  one is. The input keeps the majority of the row. */}
               <SelectTrigger
                 aria-label="Categorie voor nieuwe items"
-                className="h-8 max-w-[45%] shrink-0 gap-1 rounded-md border-0 bg-secondary px-2.5 text-xs font-medium text-muted-foreground shadow-none"
+                className={
+                  targetCategory
+                    ? "h-8 max-w-[35%] shrink-0 gap-1 rounded-md border-0 bg-secondary px-2 text-xs font-medium text-muted-foreground shadow-none"
+                    : "h-8 w-11 shrink-0 justify-center gap-0.5 rounded-md border-0 bg-secondary px-0 text-muted-foreground shadow-none"
+                }
               >
                 <Tag className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">
-                  {targetCategory ? targetCategory.name : "Geen categorie"}
-                </span>
+                {targetCategory && <span className="truncate">{targetCategory.name}</span>}
               </SelectTrigger>
               <SelectContent
                 onCloseAutoFocus={(e) => {
