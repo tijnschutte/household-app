@@ -1,7 +1,7 @@
 "use client";
 
 import { Grocery, Household, Category } from "@prisma/client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { User, House, Plus, Trash2, ShoppingBasket, Loader2, Info, LogOut } from "lucide-react";
 import { getGroceryList, getCategories } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
@@ -17,10 +17,9 @@ type GroceryWithCategory = Grocery & { category: Category | null };
 
 type HouseholdClientPageProps = {
     household: Household;
-    userId: number;
 };
 
-export default function HouseholdClientPage({ household, userId }: HouseholdClientPageProps) {
+export default function HouseholdClientPage({ household }: HouseholdClientPageProps) {
     const [groceryList, setGroceryList] = useState<GroceryWithCategory[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [showPersonal, setShowPersonal] = useState(false);
@@ -30,26 +29,43 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
     const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const fetchData = async () => {
-        setIsLoading(true);
+    const fetchData = useCallback(async (silent = false) => {
+        if (!silent) setIsLoading(true);
         try {
             const [list, cats] = await Promise.all([
-                getGroceryList(household.id, userId, showPersonal),
-                getCategories(household.id, userId, showPersonal),
+                getGroceryList(showPersonal),
+                getCategories(showPersonal),
             ]);
             setGroceryList(list as GroceryWithCategory[]);
             setCategories(cats);
         } catch (error) {
             console.error("Failed to fetch data:", error);
-            toast.error("Laden van gegevens mislukt");
+            if (!silent) toast.error("Laden van gegevens mislukt");
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
         }
-    };
+    }, [showPersonal]);
 
     useEffect(() => {
         fetchData();
-    }, [household.id, userId, showPersonal]);
+    }, [fetchData]);
+
+    // Real-time sync: poll every 10s + refetch on tab focus
+    useEffect(() => {
+        const interval = setInterval(() => fetchData(true), 10000);
+
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") {
+                fetchData(true);
+            }
+        };
+        document.addEventListener("visibilitychange", handleVisibility);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener("visibilitychange", handleVisibility);
+        };
+    }, [fetchData]);
 
     const removeGroceries = async () => {
         setIsPending(true);
@@ -93,11 +109,7 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
                 inputRef.current?.focus();
                 return;
             }
-            const newItem = await createGroceryItem(
-                itemName,
-                showPersonal ? userId : undefined,
-                showPersonal ? undefined : household.id
-            );
+            const newItem = await createGroceryItem(itemName, showPersonal);
             setGroceryList([...groceryList, { ...newItem, category: null }]);
             setItemName("");
             toast.success(`"${newItem.name}" toegevoegd`);
@@ -217,8 +229,6 @@ export default function HouseholdClientPage({ household, userId }: HouseholdClie
             <main className="flex-1 overflow-y-auto w-full max-w-2xl mx-auto px-6 pt-6 pb-6">
                 <div className="mb-4 flex justify-end">
                     <AddCategory
-                        userId={userId}
-                        householdId={showPersonal ? undefined : household.id}
                         showPersonal={showPersonal}
                         onCategoryAdded={fetchData}
                     />

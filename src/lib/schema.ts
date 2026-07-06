@@ -38,9 +38,18 @@ const groceryItemSchema = z.object({
     ),
 });
 
+// Schema for category names
+const categorySchema = z.object({
+  name: z.string()
+    .trim()
+    .min(1, "Categorienaam is vereist")
+    .max(30, "Categorienaam mag maximaal 30 karakters zijn"),
+});
+
 type SignUpSchema = z.infer<typeof signUpSchema>;
 type SignInSchema = z.infer<typeof signInSchema>;
 type GroceryItemSchema = z.infer<typeof groceryItemSchema>;
+type CategorySchema = z.infer<typeof categorySchema>;
 
 // Keep the old 'schema' export for backward compatibility with sign-up
 const schema = signUpSchema;
@@ -51,8 +60,10 @@ export {
   signUpSchema,
   signInSchema,
   groceryItemSchema,
+  categorySchema,
   type Schema,
   type SignUpSchema,
   type SignInSchema,
-  type GroceryItemSchema
+  type GroceryItemSchema,
+  type CategorySchema
 };

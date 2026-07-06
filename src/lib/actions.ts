@@ -1,11 +1,20 @@
 'use server';
 
 import prisma from '@/src/lib/db/db';
-import { schema, groceryItemSchema } from "@/src/lib/schema";
+import { schema, groceryItemSchema, categorySchema } from "@/src/lib/schema";
 import db from "@/src/lib/db/db";
 import { executeAction } from "@/src/lib/executeAction";
+import { requireUser } from "@/src/lib/session";
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+
+// Builds a where-clause fragment that scopes a query to rows the caller
+// owns: either their household's shared rows, or their own personal rows.
+// Never trust a client-supplied householdId/userId for this.
+function scopeWhere(userId: number, householdId: number | null) {
+  return householdId != null ? { OR: [{ householdId }, { userId }] } : { userId };
+}
 
 export const signUp = async (formData: FormData) => {
   return executeAction({
@@ -43,49 +52,29 @@ export const findHomeByUserId = async (userId: number | undefined) => {
   }
 }
 
-
-export const getAllHouseholds = async () => {
+export async function createGroceryItem(name: string, personal: boolean) {
   try {
-    const households = await prisma.household.findMany()
-    return households;
-  } catch (error) {
-    console.error('Failed to fetch households:', error);
-    return null;
-  }
-};
-        
+    const { userId, householdId } = await requireUser();
 
+    if (!personal && !householdId) {
+      throw new Error("Je bent niet lid van een huishouden");
+    }
 
-export async function createGroceryItem(name: string, userId: number | undefined, householdId: number | undefined) {
-  try {
-    // Validate item name
     const validated = groceryItemSchema.parse({ name });
     const itemName = validated.name.trim().toLowerCase();
 
-    // Build proper where clause - check duplicates in the correct context
-    const whereClause = householdId
-      ? { name: itemName, householdId: householdId }
-      : { name: itemName, userId: userId, householdId: null };
-
-    const storedItem = await prisma.grocery.findFirst({
-      where: whereClause,
-    });
-
-    if (storedItem) {
-      throw new Error(`"${name}" staat al in je lijst`);
-    }
-
     const groceryItem = await prisma.grocery.create({
-      data : {
-        name : itemName,
-        userId : userId,
-        householdId : householdId,
-      },
+      data: personal
+        ? { name: itemName, userId, householdId: null }
+        : { name: itemName, householdId, userId: null },
     });
     return groceryItem;
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new Error(error.errors[0].message);
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new Error(`"${name}" staat al in je lijst`);
     }
     if (error instanceof Error) {
       throw error;
@@ -97,11 +86,18 @@ export async function createGroceryItem(name: string, userId: number | undefined
 
 export async function buyGroceryItem(id: number) {
   try {
-    await prisma.grocery.update({
-      where: { id: id },
+    const { userId, householdId } = await requireUser();
+    const result = await prisma.grocery.updateMany({
+      where: { id, ...scopeWhere(userId, householdId) },
       data: { bought: true },
     });
+    if (result.count === 0) {
+      throw new Error('Kopen mislukt');
+    }
   } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
     console.error('Failed to buy grocery:', error);
     throw new Error('Kopen mislukt');
   }
@@ -109,12 +105,20 @@ export async function buyGroceryItem(id: number) {
 
 export async function deleteItems(ids: number[]) {
   try {
-    await prisma.grocery.deleteMany({
+    const { userId, householdId } = await requireUser();
+    const result = await prisma.grocery.deleteMany({
       where: {
-          id: { in: ids },
+        id: { in: ids },
+        ...scopeWhere(userId, householdId),
       },
-  });
+    });
+    if (result.count === 0) {
+      throw new Error('Verwijderen mislukt');
+    }
   } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
     console.error('Failed to delete grocery:', error);
     throw new Error('Verwijderen mislukt');
   }
@@ -125,8 +129,6 @@ export const createHousehold = async (formData: FormData) => {
     actionFn: async () => {
       const name = formData.get("name") as string;
       const userId = formData.get("userId") as string;
-
-      console.log("Creating household:", { name, userId });
 
       if (!name || !userId) {
         throw new Error("Naam en gebruikers-ID zijn vereist");
@@ -147,8 +149,6 @@ export const createHousehold = async (formData: FormData) => {
       const randomString = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const shortSecret = randomString.slice(0, 12).toUpperCase();
 
-      console.log("Generated secret:", shortSecret);
-
       const household = await db.household.create({
         data: {
           name: trimmedName,
@@ -158,8 +158,6 @@ export const createHousehold = async (formData: FormData) => {
           }
         },
       });
-
-      console.log("Household created:", household);
 
       return household;
     },
@@ -212,37 +210,31 @@ export const leaveHousehold = async (userId: number) => {
   });
 };
 
-export async function createCategory(name: string, userId: number | undefined, householdId: number | undefined) {
+export async function createCategory(name: string, personal: boolean) {
   try {
-    if (!name) {
-      throw new Error("Categorienaam is vereist");
+    const { userId, householdId } = await requireUser();
+
+    if (!personal && !householdId) {
+      throw new Error("Je bent niet lid van een huishouden");
     }
 
-    const trimmedName = name.trim();
-
-    // Check for duplicate category name in the same context
-    const whereClause = householdId
-      ? { name: trimmedName, householdId: householdId }
-      : { name: trimmedName, userId: userId, householdId: null };
-
-    const existingCategory = await prisma.category.findFirst({
-      where: whereClause,
-    });
-
-    if (existingCategory) {
-      throw new Error(`Categorie "${name}" bestaat al`);
-    }
+    const validated = categorySchema.parse({ name });
+    const trimmedName = validated.name;
 
     const category = await prisma.category.create({
-      data: {
-        name: trimmedName,
-        userId: userId,
-        householdId: householdId,
-      },
+      data: personal
+        ? { name: trimmedName, userId, householdId: null }
+        : { name: trimmedName, householdId, userId: null },
     });
 
     return category;
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new Error(error.errors[0].message);
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new Error(`Categorie "${name}" bestaat al`);
+    }
     if (error instanceof Error) {
       throw error;
     }
@@ -253,17 +245,28 @@ export async function createCategory(name: string, userId: number | undefined, h
 
 export async function deleteCategory(id: number) {
   try {
-    // First, unassign all groceries from this category
+    const { userId, householdId } = await requireUser();
+    const scope = scopeWhere(userId, householdId);
+
+    // First, unassign all groceries from this category (scoped, so only the
+    // caller's own rows in that category are touched)
     await prisma.grocery.updateMany({
-      where: { categoryId: id },
+      where: { categoryId: id, ...scope },
       data: { categoryId: null },
     });
 
-    // Then delete the category
-    await prisma.category.delete({
-      where: { id: id },
+    // Then delete the category, scoped to the caller
+    const result = await prisma.category.deleteMany({
+      where: { id, ...scope },
     });
+
+    if (result.count === 0) {
+      throw new Error('Verwijderen categorie mislukt');
+    }
   } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
     console.error('Failed to delete category:', error);
     throw new Error('Verwijderen categorie mislukt');
   }
@@ -271,11 +274,31 @@ export async function deleteCategory(id: number) {
 
 export async function updateGroceryCategory(groceryId: number, categoryId: number | null) {
   try {
-    await prisma.grocery.update({
-      where: { id: groceryId },
-      data: { categoryId: categoryId },
+    const { userId, householdId } = await requireUser();
+    const scope = scopeWhere(userId, householdId);
+
+    if (categoryId !== null) {
+      // The target category must belong to the caller's own scope too,
+      // otherwise an item could be linked into another household's category.
+      const category = await prisma.category.findFirst({
+        where: { id: categoryId, ...scope },
+      });
+      if (!category) {
+        throw new Error('Categorie niet gevonden');
+      }
+    }
+
+    const result = await prisma.grocery.updateMany({
+      where: { id: groceryId, ...scope },
+      data: { categoryId },
     });
+    if (result.count === 0) {
+      throw new Error('Bijwerken categorie mislukt');
+    }
   } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
     console.error('Failed to update grocery category:', error);
     throw new Error('Bijwerken categorie mislukt');
   }
@@ -283,16 +306,27 @@ export async function updateGroceryCategory(groceryId: number, categoryId: numbe
 
 export async function updateGroceryName(groceryId: number, name: string) {
   try {
+    const { userId, householdId } = await requireUser();
     const trimmedName = name.trim();
     if (!trimmedName) {
       throw new Error('Naam mag niet leeg zijn');
     }
-    await prisma.grocery.update({
-      where: { id: groceryId },
+
+    const result = await prisma.grocery.updateMany({
+      where: { id: groceryId, ...scopeWhere(userId, householdId) },
       data: { name: trimmedName },
     });
+    if (result.count === 0) {
+      throw new Error('Bijwerken naam mislukt');
+    }
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new Error(`"${name}" staat al in je lijst`);
+    }
+    if (error instanceof Error) {
+      throw error;
+    }
     console.error('Failed to update grocery name:', error);
-    throw new Error(error instanceof Error ? error.message : 'Bijwerken naam mislukt');
+    throw new Error('Bijwerken naam mislukt');
   }
 }

@@ -8,19 +8,14 @@ import { auth, signOut } from "@/src/lib/auth";
 
 export default async function Page() {
     const session = await auth();
-    console.log("session:", session);
     if (!session?.user?.id) {
         redirect("/sign-in");
     }
-    const householdId = await getHouseholdById(Number(session.user?.id));
-    console.log("householdId:", householdId);
-    if (!householdId) {
+    const household = await getHouseholdById(Number(session.user?.id));
+    if (!household) {
         redirect("/household-setup");
     }
 
-    return <HouseholdClientPage
-                household={householdId}
-                userId={Number(session.user?.id)}
-            />;
+    return <HouseholdClientPage household={household} />;
 }
 

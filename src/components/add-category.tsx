@@ -18,13 +18,11 @@ import { createCategory } from "@/src/lib/actions";
 import { toast } from "sonner";
 
 type AddCategoryProps = {
-  userId: number;
-  householdId: number | undefined;
   showPersonal: boolean;
   onCategoryAdded: () => void;
 };
 
-export default function AddCategory({ userId, householdId, showPersonal, onCategoryAdded }: AddCategoryProps) {
+export default function AddCategory({ showPersonal, onCategoryAdded }: AddCategoryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -39,11 +37,7 @@ export default function AddCategory({ userId, householdId, showPersonal, onCateg
 
     setIsCreating(true);
     try {
-      await createCategory(
-        categoryName,
-        showPersonal ? userId : undefined,
-        showPersonal ? undefined : householdId
-      );
+      await createCategory(categoryName, showPersonal);
       toast.success(`Categorie "${categoryName}" aangemaakt`);
       setCategoryName("");
       setIsOpen(false);
