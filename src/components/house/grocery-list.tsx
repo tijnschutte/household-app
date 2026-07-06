@@ -1,7 +1,15 @@
 "use client";
 
 import { Grocery, Category } from "@prisma/client";
-import { ShoppingCart, Trash2, Pencil, GripVertical } from "lucide-react";
+import {
+  ShoppingCart,
+  Trash2,
+  Pencil,
+  GripVertical,
+  Check,
+  ChevronDown,
+  Loader2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input";
 import {
@@ -25,26 +33,40 @@ type GroceryListProps = {
   groceryList: GroceryWithCategory[];
   categories: Category[];
   isLoading: boolean;
-  selectedItems: Set<number>;
-  toggleSelection: (id: number) => void;
+  onToggleBought: (id: number, bought: boolean) => void;
   onDragEnd: (groceryId: number, categoryId: number | null) => void;
   onDeleteCategory: (categoryId: number) => void;
   onRenameItem: (groceryId: number, newName: string) => void;
+  onClearBought: () => void;
+  isClearingBought?: boolean;
   showCategories?: boolean;
   /** Set to true while a drag or inline rename is in progress, so callers (e.g. polling) can skip clobbering it. */
   busyRef?: React.MutableRefObject<boolean>;
 };
 
+// The leading round checkbox: purely visual (a bordered circle, filled with a
+// Check icon when bought), the whole row is the actual tap target.
+function CheckCircle({ bought }: { bought: boolean }) {
+  return (
+    <div
+      className={`
+        w-6 h-6 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition-colors
+        ${bought ? "bg-blue-600 border-blue-600" : "border-gray-300"}
+      `}
+    >
+      {bought && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+    </div>
+  );
+}
+
 function DraggableGroceryItem({
   item,
-  isSelected,
-  onClick,
+  onToggleBought,
   onRename,
   onEditingChange,
 }: {
   item: GroceryWithCategory;
-  isSelected: boolean;
-  onClick: () => void;
+  onToggleBought: () => void;
   onRename: (newName: string) => void;
   onEditingChange?: (editing: boolean) => void;
 }) {
@@ -100,7 +122,7 @@ function DraggableGroceryItem({
   if (isEditing) {
     return (
       <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-white border-2 border-blue-400 shadow-md">
-        <div className="w-5 h-5 flex-shrink-0" />
+        <div className="w-6 h-6 flex-shrink-0" />
         <Input
           ref={inputRef}
           value={editValue}
@@ -118,35 +140,15 @@ function DraggableGroceryItem({
     <div
       ref={setNodeRef}
       style={style}
-      onClick={onClick}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        startEditing();
-      }}
+      onClick={onToggleBought}
       className={`
         flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer group select-none
-        ${
-          isSelected
-            ? "bg-green-50 border-2 border-green-300 shadow-sm scale-[0.98]"
-            : "bg-white border-2 border-transparent shadow-md hover:shadow-lg hover:scale-[1.02]"
-        }
+        bg-white border-2 border-transparent shadow-md hover:shadow-lg
         ${isDragging ? "opacity-0" : "transition-all duration-100 ease-in-out"}
       `}
     >
-      <div
-        {...listeners}
-        {...attributes}
-        className="touch-none cursor-grab active:cursor-grabbing p-1 -ml-1 text-gray-400 hover:text-gray-600"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical className="w-4 h-4" />
-      </div>
-      <span
-        className={`
-          truncate w-full text-base min-w-0 first-letter:uppercase transition-all duration-100
-          ${isSelected ? "text-gray-500 line-through" : "text-gray-800 font-medium"}
-        `}
-      >
+      <CheckCircle bought={false} />
+      <span className="truncate w-full text-base min-w-0 first-letter:uppercase text-gray-800 font-medium">
         {item.name}
       </span>
       <button
@@ -154,24 +156,54 @@ function DraggableGroceryItem({
           e.stopPropagation();
           startEditing();
         }}
-        className="p-1 hover:bg-gray-100 rounded"
+        className="h-11 w-11 -my-2 flex items-center justify-center hover:bg-gray-100 rounded shrink-0"
       >
         <Pencil className="w-3.5 h-3.5 text-gray-400" />
       </button>
+      <div
+        {...listeners}
+        {...attributes}
+        className="h-11 w-11 -my-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+    </div>
+  );
+}
+
+// A checked-off item rendered inside the collapsed "Afgevinkt" section: no
+// drag handle, no rename affordance — just struck-through, muted, tap to
+// restore (un-check). categoryId is left untouched while bought, so unchecking
+// puts the item straight back into its old category group.
+function CheckedGroceryItem({
+  item,
+  onToggleBought,
+}: {
+  item: GroceryWithCategory;
+  onToggleBought: () => void;
+}) {
+  return (
+    <div
+      onClick={onToggleBought}
+      className="flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer select-none bg-white/60 border-2 border-transparent"
+    >
+      <CheckCircle bought />
+      <span className="truncate w-full text-base min-w-0 first-letter:uppercase text-gray-400 line-through">
+        {item.name}
+      </span>
     </div>
   );
 }
 
 function UncategorizedItems({
   items,
-  selectedItems,
-  toggleSelection,
+  onToggleBought,
   onRenameItem,
   onItemEditingChange,
 }: {
   items: GroceryWithCategory[];
-  selectedItems: Set<number>;
-  toggleSelection: (id: number) => void;
+  onToggleBought: (id: number) => void;
   onRenameItem: (groceryId: number, newName: string) => void;
   onItemEditingChange?: (id: number, editing: boolean) => void;
 }) {
@@ -191,8 +223,7 @@ function UncategorizedItems({
           <DraggableGroceryItem
             key={item.id}
             item={item}
-            isSelected={selectedItems.has(item.id)}
-            onClick={() => toggleSelection(item.id)}
+            onToggleBought={() => onToggleBought(item.id)}
             onRename={(newName) => onRenameItem(item.id, newName)}
             onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
           />
@@ -206,8 +237,7 @@ function DroppableCategory({
   id,
   title,
   items,
-  selectedItems,
-  toggleSelection,
+  onToggleBought,
   onDelete,
   onRenameItem,
   onItemEditingChange,
@@ -216,8 +246,7 @@ function DroppableCategory({
   id: string;
   title: string;
   items: GroceryWithCategory[];
-  selectedItems: Set<number>;
-  toggleSelection: (id: number) => void;
+  onToggleBought: (id: number) => void;
   onDelete?: () => void;
   onRenameItem: (groceryId: number, newName: string) => void;
   onItemEditingChange?: (id: number, editing: boolean) => void;
@@ -259,8 +288,7 @@ function DroppableCategory({
             <DraggableGroceryItem
               key={item.id}
               item={item}
-              isSelected={selectedItems.has(item.id)}
-              onClick={() => toggleSelection(item.id)}
+              onToggleBought={() => onToggleBought(item.id)}
               onRename={(newName) => onRenameItem(item.id, newName)}
               onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
             />
@@ -271,15 +299,67 @@ function DroppableCategory({
   );
 }
 
+// Collapsed-by-default section for checked-off items, sunk to the very
+// bottom of the list. Expand/collapse is local UI state, never persisted.
+function CheckedSection({
+  items,
+  onToggleBought,
+  onClear,
+  isClearing,
+}: {
+  items: GroceryWithCategory[];
+  onToggleBought: (id: number) => void;
+  onClear: () => void;
+  isClearing: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="pt-2">
+      <button
+        onClick={() => setIsOpen((open) => !open)}
+        className="flex items-center justify-between w-full min-h-11 px-2 py-2 text-sm font-semibold uppercase tracking-wide text-gray-500"
+      >
+        <span>Afgevinkt ({items.length})</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <div className="space-y-2 mt-1">
+          {items.map((item) => (
+            <CheckedGroceryItem
+              key={item.id}
+              item={item}
+              onToggleBought={() => onToggleBought(item.id)}
+            />
+          ))}
+          <Button
+            variant="ghost"
+            onClick={onClear}
+            disabled={isClearing}
+            className="w-full h-11 mt-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            {isClearing && <Loader2 className="w-4 h-4 animate-spin" />}
+            Wis afgevinkte items ({items.length})
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GroceryList({
   groceryList,
   categories,
   isLoading,
-  selectedItems,
-  toggleSelection,
+  onToggleBought,
   onDragEnd,
   onDeleteCategory,
   onRenameItem,
+  onClearBought,
+  isClearingBought = false,
   showCategories = true,
   busyRef,
 }: GroceryListProps) {
@@ -352,11 +432,18 @@ export default function GroceryList({
     onDragEnd(groceryId, categoryId);
   };
 
-  // Group items by category
-  const uncategorizedItems = groceryList.filter((item) => !item.categoryId);
+  // Checked-off items leave their category groups entirely and render in a
+  // single collapsed section at the bottom, most-recently-checked first.
+  const uncheckedItems = groceryList.filter((item) => !item.bought);
+  const checkedItems = groceryList
+    .filter((item) => item.bought)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+  // Group unchecked items by category
+  const uncategorizedItems = uncheckedItems.filter((item) => !item.categoryId);
   const categorizedItems = categories.map((category) => ({
     category,
-    items: groceryList.filter((item) => item.categoryId === category.id),
+    items: uncheckedItems.filter((item) => item.categoryId === category.id),
   }));
   // Don't filter out empty categories - show all categories
 
@@ -371,13 +458,16 @@ export default function GroceryList({
         </div>
       )}
 
-      {!isLoading && groceryList.length === 0 && categories.length === 0 && (
-        <div className="flex flex-col items-center justify-center p-12 text-gray-400">
-          <ShoppingCart className="w-16 h-16 mb-4 opacity-30" />
-          <p className="text-lg font-medium">Geen items</p>
-          <p className="text-sm mt-1">Voeg je eerste item toe!</p>
-        </div>
-      )}
+      {!isLoading &&
+        uncheckedItems.length === 0 &&
+        checkedItems.length === 0 &&
+        categories.length === 0 && (
+          <div className="flex flex-col items-center justify-center p-12 text-gray-400">
+            <ShoppingCart className="w-16 h-16 mb-4 opacity-30" />
+            <p className="text-lg font-medium">Geen items</p>
+            <p className="text-sm mt-1">Voeg je eerste item toe!</p>
+          </div>
+        )}
 
       {!isLoading && (
         <>
@@ -389,8 +479,7 @@ export default function GroceryList({
                 id={`category-${category.id}`}
                 title={category.name}
                 items={items}
-                selectedItems={selectedItems}
-                toggleSelection={toggleSelection}
+                onToggleBought={(id) => onToggleBought(id, true)}
                 onDelete={() => onDeleteCategory(category.id)}
                 onRenameItem={onRenameItem}
                 onItemEditingChange={handleItemEditingChange}
@@ -401,8 +490,7 @@ export default function GroceryList({
           {showCategories && (uncategorizedItems.length > 0 || categories.length > 0) && (
             <UncategorizedItems
               items={uncategorizedItems}
-              selectedItems={selectedItems}
-              toggleSelection={toggleSelection}
+              onToggleBought={(id) => onToggleBought(id, true)}
               onRenameItem={onRenameItem}
               onItemEditingChange={handleItemEditingChange}
             />
@@ -415,14 +503,20 @@ export default function GroceryList({
                 <DraggableGroceryItem
                   key={item.id}
                   item={item}
-                  isSelected={selectedItems.has(item.id)}
-                  onClick={() => toggleSelection(item.id)}
+                  onToggleBought={() => onToggleBought(item.id, true)}
                   onRename={(newName) => onRenameItem(item.id, newName)}
                   onEditingChange={(editing) => handleItemEditingChange(item.id, editing)}
                 />
               ))}
             </div>
           )}
+
+          <CheckedSection
+            items={checkedItems}
+            onToggleBought={(id) => onToggleBought(id, false)}
+            onClear={onClearBought}
+            isClearing={isClearingBought}
+          />
         </>
       )}
     </div>

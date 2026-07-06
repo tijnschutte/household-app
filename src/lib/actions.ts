@@ -1,13 +1,13 @@
-'use server';
+"use server";
 
-import prisma from '@/src/lib/db/db';
+import prisma from "@/src/lib/db/db";
 import { schema, groceryItemSchema, categorySchema } from "@/src/lib/schema";
 import db from "@/src/lib/db/db";
 import { executeAction } from "@/src/lib/executeAction";
 import { requireUser } from "@/src/lib/session";
-import bcrypt from 'bcryptjs';
-import { Prisma } from '@prisma/client';
-import { z } from 'zod';
+import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
+import { z } from "zod";
 
 // Builds a where-clause fragment that scopes a query to rows the caller
 // owns: either their household's shared rows, or their own personal rows.
@@ -47,10 +47,10 @@ export const findHomeByUserId = async (userId: number | undefined) => {
     });
     return household;
   } catch (error) {
-    console.error('Failed to fetch household:', error);
+    console.error("Failed to fetch household:", error);
     return null;
   }
-}
+};
 
 export async function createGroceryItem(name: string, personal: boolean) {
   try {
@@ -73,33 +73,89 @@ export async function createGroceryItem(name: string, personal: boolean) {
     if (error instanceof z.ZodError) {
       throw new Error(error.errors[0].message);
     }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new Error(`"${name}" staat al in je lijst`);
     }
     if (error instanceof Error) {
       throw error;
     }
-    console.error('Failed to create grocery:', error);
-    throw new Error('Toevoegen aan lijst mislukt');
+    console.error("Failed to create grocery:", error);
+    throw new Error("Toevoegen aan lijst mislukt");
   }
 }
 
-export async function buyGroceryItem(id: number) {
+export async function setGroceryBought(id: number, bought: boolean) {
   try {
     const { userId, householdId } = await requireUser();
     const result = await prisma.grocery.updateMany({
       where: { id, ...scopeWhere(userId, householdId) },
-      data: { bought: true },
+      data: { bought },
     });
     if (result.count === 0) {
-      throw new Error('Kopen mislukt');
+      throw new Error("Bijwerken mislukt");
     }
   } catch (error) {
     if (error instanceof Error) {
       throw error;
     }
-    console.error('Failed to buy grocery:', error);
-    throw new Error('Kopen mislukt');
+    console.error("Failed to update grocery bought state:", error);
+    throw new Error("Bijwerken mislukt");
+  }
+}
+
+// Recreates items that were just removed via deleteItems, for the "Ongedaan
+// maken" undo action. Each item carries enough info to reconstruct it within
+// the caller's own scope (never a client-supplied household/user id). Restored
+// items come back as bought (checked off), mirroring the state they were in
+// right before the clear-action deleted them.
+type RestoreItem = { name: string; categoryId: number | null; personal: boolean };
+
+export async function restoreItems(items: RestoreItem[]) {
+  try {
+    const { userId, householdId } = await requireUser();
+    const scope = scopeWhere(userId, householdId);
+
+    let restored = 0;
+    for (const item of items) {
+      if (item.personal && userId == null) continue;
+      if (!item.personal && householdId == null) continue;
+
+      // The category must belong to the caller's own scope too, otherwise an
+      // item could be linked into another household's category (same check
+      // as updateGroceryCategory).
+      let categoryId = item.categoryId;
+      if (categoryId !== null) {
+        const category = await prisma.category.findFirst({
+          where: { id: categoryId, ...scope },
+        });
+        if (!category) {
+          categoryId = null;
+        }
+      }
+
+      try {
+        await prisma.grocery.create({
+          data: item.personal
+            ? { name: item.name, userId, householdId: null, categoryId, bought: true }
+            : { name: item.name, householdId, userId: null, categoryId, bought: true },
+        });
+        restored++;
+      } catch (error) {
+        // Unique constraint collision: an item with this name may have been
+        // re-added since the delete. Skip it rather than failing the whole undo.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          continue;
+        }
+        throw error;
+      }
+    }
+    return restored;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    console.error("Failed to restore items:", error);
+    throw new Error("Herstellen mislukt");
   }
 }
 
@@ -113,14 +169,14 @@ export async function deleteItems(ids: number[]) {
       },
     });
     if (result.count === 0) {
-      throw new Error('Verwijderen mislukt');
+      throw new Error("Verwijderen mislukt");
     }
   } catch (error) {
     if (error instanceof Error) {
       throw error;
     }
-    console.error('Failed to delete grocery:', error);
-    throw new Error('Verwijderen mislukt');
+    console.error("Failed to delete grocery:", error);
+    throw new Error("Verwijderen mislukt");
   }
 }
 
@@ -138,7 +194,7 @@ export const createHousehold = async (formData: FormData) => {
 
       // Check if household name already exists
       const existingHousehold = await db.household.findUnique({
-        where: { name: trimmedName }
+        where: { name: trimmedName },
       });
 
       if (existingHousehold) {
@@ -146,7 +202,8 @@ export const createHousehold = async (formData: FormData) => {
       }
 
       // Generate a random secret for the household using crypto
-      const randomString = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const randomString =
+        Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const shortSecret = randomString.slice(0, 12).toUpperCase();
 
       const household = await db.household.create({
@@ -154,8 +211,8 @@ export const createHousehold = async (formData: FormData) => {
           name: trimmedName,
           secret: shortSecret,
           members: {
-            connect: { id: parseInt(userId) }
-          }
+            connect: { id: parseInt(userId) },
+          },
         },
       });
 
@@ -176,7 +233,7 @@ export const joinHousehold = async (formData: FormData) => {
       }
 
       const household = await db.household.findUnique({
-        where: { secret: secret.trim().toUpperCase() }
+        where: { secret: secret.trim().toUpperCase() },
       });
 
       if (!household) {
@@ -185,7 +242,7 @@ export const joinHousehold = async (formData: FormData) => {
 
       await db.user.update({
         where: { id: parseInt(userId) },
-        data: { householdId: household.id }
+        data: { householdId: household.id },
       });
 
       return household;
@@ -203,7 +260,7 @@ export const leaveHousehold = async (userId: number) => {
 
       await db.user.update({
         where: { id: userId },
-        data: { householdId: null }
+        data: { householdId: null },
       });
     },
     successMessage: "Huishouden succesvol verlaten",
@@ -232,14 +289,14 @@ export async function createCategory(name: string, personal: boolean) {
     if (error instanceof z.ZodError) {
       throw new Error(error.errors[0].message);
     }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new Error(`Categorie "${name}" bestaat al`);
     }
     if (error instanceof Error) {
       throw error;
     }
-    console.error('Failed to create category:', error);
-    throw new Error('Aanmaken categorie mislukt');
+    console.error("Failed to create category:", error);
+    throw new Error("Aanmaken categorie mislukt");
   }
 }
 
@@ -261,14 +318,14 @@ export async function deleteCategory(id: number) {
     });
 
     if (result.count === 0) {
-      throw new Error('Verwijderen categorie mislukt');
+      throw new Error("Verwijderen categorie mislukt");
     }
   } catch (error) {
     if (error instanceof Error) {
       throw error;
     }
-    console.error('Failed to delete category:', error);
-    throw new Error('Verwijderen categorie mislukt');
+    console.error("Failed to delete category:", error);
+    throw new Error("Verwijderen categorie mislukt");
   }
 }
 
@@ -284,7 +341,7 @@ export async function updateGroceryCategory(groceryId: number, categoryId: numbe
         where: { id: categoryId, ...scope },
       });
       if (!category) {
-        throw new Error('Categorie niet gevonden');
+        throw new Error("Categorie niet gevonden");
       }
     }
 
@@ -293,14 +350,14 @@ export async function updateGroceryCategory(groceryId: number, categoryId: numbe
       data: { categoryId },
     });
     if (result.count === 0) {
-      throw new Error('Bijwerken categorie mislukt');
+      throw new Error("Bijwerken categorie mislukt");
     }
   } catch (error) {
     if (error instanceof Error) {
       throw error;
     }
-    console.error('Failed to update grocery category:', error);
-    throw new Error('Bijwerken categorie mislukt');
+    console.error("Failed to update grocery category:", error);
+    throw new Error("Bijwerken categorie mislukt");
   }
 }
 
@@ -309,7 +366,7 @@ export async function updateGroceryName(groceryId: number, name: string) {
     const { userId, householdId } = await requireUser();
     const trimmedName = name.trim();
     if (!trimmedName) {
-      throw new Error('Naam mag niet leeg zijn');
+      throw new Error("Naam mag niet leeg zijn");
     }
 
     const result = await prisma.grocery.updateMany({
@@ -317,16 +374,16 @@ export async function updateGroceryName(groceryId: number, name: string) {
       data: { name: trimmedName },
     });
     if (result.count === 0) {
-      throw new Error('Bijwerken naam mislukt');
+      throw new Error("Bijwerken naam mislukt");
     }
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new Error(`"${name}" staat al in je lijst`);
     }
     if (error instanceof Error) {
       throw error;
     }
-    console.error('Failed to update grocery name:', error);
-    throw new Error('Bijwerken naam mislukt');
+    console.error("Failed to update grocery name:", error);
+    throw new Error("Bijwerken naam mislukt");
   }
 }

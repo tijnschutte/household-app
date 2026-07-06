@@ -2,16 +2,18 @@
 
 import { Grocery, Household, Category } from "@prisma/client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { User, House, Plus, Trash2, Loader2, Info, LogOut } from "lucide-react";
+import { User, House, Plus, Info, LogOut } from "lucide-react";
 import { getHomeData } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
 import {
   createGroceryItem,
   deleteItems,
+  restoreItems,
   updateGroceryCategory,
   deleteCategory,
   updateGroceryName,
+  setGroceryBought,
 } from "@/src/lib/actions";
 import GroceryList from "@/src/components/house/grocery-list";
 import AddCategory from "@/src/components/add-category";
@@ -41,9 +43,8 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     personal: null,
   });
   const [showPersonal, setShowPersonal] = useState(false);
-  const [isPending, setIsPending] = useState(false);
   const [itemName, setItemName] = useState("");
-  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [isClearingBought, setIsClearingBought] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   // The <main> element is the actual scrolling container (overflow-y-auto);
   // scrolled to bottom only after the current user adds an item.
@@ -102,9 +103,6 @@ export default function HouseholdClientPage({ household, initialData }: Househol
 
   const handleToggleView = (personal: boolean) => {
     setShowPersonal(personal);
-    // Selection/edit state is scoped to the previously visible list; carrying
-    // it across a list switch would let a stale selection act on the wrong items.
-    setSelectedItems(new Set());
     const key: ViewKey = personal ? "personal" : "household";
     if (dataByView[key] === null) {
       fetchData(key);
@@ -119,37 +117,70 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     });
   };
 
-  const removeGroceries = async () => {
-    setIsPending(true);
+  const handleToggleBought = async (groceryId: number, bought: boolean) => {
+    // Optimistic toggle: flip locally right away, revert + error toast on failure.
+    // Deliberately doesn't touch busyRef — this is a quick, low-risk mutation,
+    // not a multi-step drag/edit that a poll refresh could clobber badly.
+    updateView(viewKey, (data) => ({
+      ...data,
+      items: data.items.map((item) => (item.id === groceryId ? { ...item, bought } : item)),
+    }));
+
     try {
-      const deletedItems = Array.from(selectedItems);
-      await deleteItems(deletedItems);
+      await setGroceryBought(groceryId, bought);
+    } catch (error) {
       updateView(viewKey, (data) => ({
         ...data,
-        items: data.items.filter((item) => !selectedItems.has(item.id)),
+        items: data.items.map((item) =>
+          item.id === groceryId ? { ...item, bought: !bought } : item
+        ),
       }));
-      setSelectedItems(new Set());
-      toast.success(
-        `${deletedItems.length} item${deletedItems.length === 1 ? "" : "s"} verwijderd`
-      );
-    } catch (error) {
-      console.error("Error deleting items:", error);
-      toast.error("Verwijderen mislukt");
-    } finally {
-      setIsPending(false);
+      console.error("Failed to update bought state:", error);
+      toast.error("Bijwerken mislukt");
     }
   };
 
-  const toggleSelection = (id: number) => {
-    setSelectedItems((prev) => {
-      const newSelected = new Set(prev);
-      if (newSelected.has(id)) {
-        newSelected.delete(id);
-      } else {
-        newSelected.add(id);
-      }
-      return newSelected;
-    });
+  const handleClearBought = async () => {
+    const boughtItems = groceryList.filter((item) => item.bought);
+    if (boughtItems.length === 0) return;
+
+    setIsClearingBought(true);
+    // Snapshot enough to restore each item on undo: name, category, and
+    // whether it lives in the household's shared scope or the caller's
+    // personal scope (mirrors createGroceryItem's `personal` flag).
+    const restoreSnapshot = boughtItems.map((item) => ({
+      name: item.name,
+      categoryId: item.categoryId,
+      personal: item.userId !== null,
+    }));
+    const ids = boughtItems.map((item) => item.id);
+
+    try {
+      await deleteItems(ids);
+      updateView(viewKey, (data) => ({
+        ...data,
+        items: data.items.filter((item) => !ids.includes(item.id)),
+      }));
+      toast.success(`${ids.length} item${ids.length === 1 ? "" : "s"} verwijderd`, {
+        action: {
+          label: "Ongedaan maken",
+          onClick: async () => {
+            try {
+              await restoreItems(restoreSnapshot);
+              fetchData(viewKey);
+            } catch (error) {
+              console.error("Failed to restore items:", error);
+              toast.error("Herstellen mislukt");
+            }
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error clearing bought items:", error);
+      toast.error("Verwijderen mislukt");
+    } finally {
+      setIsClearingBought(false);
+    }
   };
 
   const addItem = async () => {
@@ -329,11 +360,12 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           groceryList={groceryList}
           categories={categories}
           isLoading={isLoading}
-          selectedItems={selectedItems}
-          toggleSelection={toggleSelection}
+          onToggleBought={handleToggleBought}
           onDragEnd={handleDragEnd}
           onDeleteCategory={handleDeleteCategory}
           onRenameItem={handleRenameItem}
+          onClearBought={handleClearBought}
+          isClearingBought={isClearingBought}
           showCategories={true}
           busyRef={busyRef}
         />
@@ -370,25 +402,6 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           >
             <Plus />
           </Button>
-
-          {/* Delete button positioned to the right of add button */}
-          {selectedItems.size > 0 && (
-            <div className="relative">
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={removeGroceries}
-                disabled={isPending}
-                className="h-12 w-12 shadow-lg hover:shadow-xl active:scale-95 transition-all animate-in fade-in zoom-in duration-200"
-              >
-                {isPending ? <Loader2 className="animate-spin" /> : <Trash2 />}
-              </Button>
-              {/* Counter badge */}
-              <div className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-md">
-                {selectedItems.size}
-              </div>
-            </div>
-          )}
         </div>
         <div className="relative flex flex-row justify-center gap-3 pt-4 pb-2">
           <Button
