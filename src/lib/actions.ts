@@ -124,10 +124,11 @@ export async function setGroceryBought(id: number, bought: boolean) {
 
 // Recreates items that were just removed via deleteItems, for the "Ongedaan
 // maken" undo action. Each item carries enough info to reconstruct it within
-// the caller's own scope (never a client-supplied household/user id). Restored
-// items come back as bought (checked off), mirroring the state they were in
-// right before the clear-action deleted them.
-type RestoreItem = { name: string; categoryId: number | null; personal: boolean };
+// the caller's own scope (never a client-supplied household/user id). Items
+// are restored in the bought-state they had right before deletion: `bought`
+// defaults to true (the WP-4 clear-afgevinkt flow deletes bought items), while
+// a swipe-deleted unbought row passes false so undo puts it back on the list.
+type RestoreItem = { name: string; categoryId: number | null; personal: boolean; bought?: boolean };
 
 export async function restoreItems(items: RestoreItem[]) {
   try {
@@ -153,10 +154,11 @@ export async function restoreItems(items: RestoreItem[]) {
       }
 
       try {
+        const bought = item.bought ?? true;
         await prisma.grocery.create({
           data: item.personal
-            ? { name: item.name, userId, householdId: null, categoryId, bought: true }
-            : { name: item.name, householdId, userId: null, categoryId, bought: true },
+            ? { name: item.name, userId, householdId: null, categoryId, bought }
+            : { name: item.name, householdId, userId: null, categoryId, bought },
         });
         restored++;
       } catch (error) {

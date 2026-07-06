@@ -27,6 +27,16 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { Button } from "../ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 type GroceryWithCategory = Grocery & { category: Category | null };
 
@@ -40,6 +50,8 @@ type GroceryListProps = {
   onRenameItem: (groceryId: number, newName: string) => void;
   /** "+" on a category header: pre-target that category in the add bar and focus the input. */
   onAddToCategory?: (categoryId: number) => void;
+  /** Swipe-to-delete on a row: delete this single item (with undo toast upstream). */
+  onDeleteItem: (groceryId: number) => void;
   onClearBought: () => void;
   isClearingBought?: boolean;
   showCategories?: boolean;
@@ -62,15 +74,22 @@ function CheckCircle({ bought }: { bought: boolean }) {
   );
 }
 
+// Width of the red "Verwijderen" action revealed by swiping a row left.
+const SWIPE_ACTION_WIDTH = 96;
+// A gesture must move this many px before we decide it's a swipe or a scroll.
+const SWIPE_INTENT_THRESHOLD = 12;
+
 function DraggableGroceryItem({
   item,
   onToggleBought,
   onRename,
+  onDelete,
   onEditingChange,
 }: {
   item: GroceryWithCategory;
   onToggleBought: () => void;
   onRename: (newName: string) => void;
+  onDelete: () => void;
   onEditingChange?: (editing: boolean) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -79,6 +98,26 @@ function DraggableGroceryItem({
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.id,
   });
+
+  // Swipe-to-delete state. The gesture is tracked with pointer events on the
+  // row body only — the drag handle belongs to dnd-kit (its PointerSensor /
+  // TouchSensor listeners are attached to the handle element exclusively, so
+  // a horizontal swipe on the body can never start a drag). `touch-pan-y`
+  // on the row keeps native vertical scrolling working: the browser handles
+  // vertical pans itself and only lets horizontal movement reach us.
+  const [swipeX, setSwipeX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const swipeRef = useRef({
+    startX: 0,
+    startY: 0,
+    baseX: 0,
+    pointerId: -1,
+    // idle → pending (pointer down) → swiping (horizontal intent) | cancelled (vertical intent)
+    mode: "idle" as "idle" | "pending" | "swiping" | "cancelled",
+  });
+  // Set when a swipe gesture just ended, so the click that the browser fires
+  // right after pointerup doesn't also toggle the item as bought.
+  const justSwipedRef = useRef(false);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -116,11 +155,94 @@ function DraggableGroceryItem({
     }
   };
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (!e.isPrimary) return;
+    // Gestures starting on the drag handle are dnd-kit's, not ours.
+    if ((e.target as HTMLElement).closest("[data-drag-handle]")) return;
+    const s = swipeRef.current;
+    s.startX = e.clientX;
+    s.startY = e.clientY;
+    s.baseX = swipeX;
+    s.pointerId = e.pointerId;
+    s.mode = "pending";
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const s = swipeRef.current;
+    if (e.pointerId !== s.pointerId) return;
+    if (s.mode !== "pending" && s.mode !== "swiping") return;
+
+    const dx = e.clientX - s.startX;
+    const dy = e.clientY - s.startY;
+
+    if (s.mode === "pending") {
+      // Vertical movement dominates: this is a scroll, leave it alone.
+      if (Math.abs(dy) > SWIPE_INTENT_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+        s.mode = "cancelled";
+        return;
       }
-    : undefined;
+      // Horizontal movement dominates: claim the gesture as a swipe.
+      if (Math.abs(dx) > SWIPE_INTENT_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+        s.mode = "swiping";
+        setIsSwiping(true);
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } else {
+        return;
+      }
+    }
+
+    // Track the finger: only leftward reveal, with a little overshoot room.
+    const next = Math.min(0, Math.max(-SWIPE_ACTION_WIDTH - 24, s.baseX + dx));
+    setSwipeX(next);
+  };
+
+  const settleSwipe = (e: React.PointerEvent) => {
+    const s = swipeRef.current;
+    if (e.pointerId !== s.pointerId) return;
+    if (s.mode === "swiping") {
+      justSwipedRef.current = true;
+      setIsSwiping(false);
+      // Snap open when past half the action width, else snap back shut.
+      setSwipeX((x) => (x < -SWIPE_ACTION_WIDTH / 2 ? -SWIPE_ACTION_WIDTH : 0));
+    }
+    s.mode = "idle";
+    s.pointerId = -1;
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    const s = swipeRef.current;
+    if (e.pointerId !== s.pointerId) return;
+    if (s.mode === "swiping") {
+      setIsSwiping(false);
+      setSwipeX(0);
+    }
+    s.mode = "idle";
+    s.pointerId = -1;
+  };
+
+  const handleRowClick = () => {
+    // The click fired by the browser right after a swipe ends must not
+    // toggle the item.
+    if (justSwipedRef.current) {
+      justSwipedRef.current = false;
+      return;
+    }
+    // Tapping a row whose delete action is revealed closes it again.
+    if (swipeX !== 0) {
+      setSwipeX(0);
+      return;
+    }
+    onToggleBought();
+  };
+
+  const style: React.CSSProperties = {
+    transform: transform
+      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+      : swipeX !== 0
+        ? `translateX(${swipeX}px)`
+        : undefined,
+    transition: isSwiping || isDragging ? undefined : "transform 150ms ease-out",
+  };
 
   if (isEditing) {
     return (
@@ -140,36 +262,57 @@ function DraggableGroceryItem({
   }
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      onClick={onToggleBought}
-      className={`
-        flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer group select-none
-        bg-white border-2 border-transparent shadow-md hover:shadow-lg
-        ${isDragging ? "opacity-0" : "transition-all duration-100 ease-in-out"}
-      `}
-    >
-      <CheckCircle bought={false} />
-      <span className="truncate w-full text-base min-w-0 first-letter:uppercase text-gray-800 font-medium">
-        {item.name}
-      </span>
+    <div className="relative overflow-hidden rounded-lg">
+      {/* Red delete action revealed behind the row by swiping left */}
       <button
-        onClick={(e) => {
-          e.stopPropagation();
-          startEditing();
+        onClick={() => {
+          setSwipeX(0);
+          onDelete();
         }}
-        className="h-11 w-11 -my-2 flex items-center justify-center hover:bg-gray-100 rounded shrink-0"
+        tabIndex={swipeX === 0 ? -1 : 0}
+        aria-hidden={swipeX === 0}
+        className={`absolute inset-y-0 right-0 w-24 bg-red-600 text-white text-sm font-medium flex items-center justify-center ${
+          isDragging ? "hidden" : ""
+        }`}
       >
-        <Pencil className="w-3.5 h-3.5 text-gray-400" />
+        Verwijderen
       </button>
       <div
-        {...listeners}
-        {...attributes}
-        className="h-11 w-11 -my-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 shrink-0"
-        onClick={(e) => e.stopPropagation()}
+        ref={setNodeRef}
+        style={style}
+        onClick={handleRowClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={settleSwipe}
+        onPointerCancel={handlePointerCancel}
+        className={`
+          relative flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer group select-none touch-pan-y
+          bg-white border-2 border-transparent shadow-md hover:shadow-lg
+          ${isDragging ? "opacity-0" : ""}
+        `}
       >
-        <GripVertical className="w-4 h-4" />
+        <CheckCircle bought={false} />
+        <span className="truncate w-full text-base min-w-0 first-letter:uppercase text-gray-800 font-medium">
+          {item.name}
+        </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            startEditing();
+          }}
+          className="h-11 w-11 -my-2 flex items-center justify-center hover:bg-gray-100 rounded shrink-0"
+        >
+          <Pencil className="w-3.5 h-3.5 text-gray-400" />
+        </button>
+        <div
+          {...listeners}
+          {...attributes}
+          data-drag-handle
+          className="h-11 w-11 -my-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
       </div>
     </div>
   );
@@ -201,37 +344,57 @@ function CheckedGroceryItem({
 
 function UncategorizedItems({
   items,
+  isDragActive,
   onToggleBought,
   onRenameItem,
+  onDeleteItem,
   onItemEditingChange,
 }: {
   items: GroceryWithCategory[];
+  isDragActive: boolean;
   onToggleBought: (id: number) => void;
   onRenameItem: (groceryId: number, newName: string) => void;
+  onDeleteItem: (groceryId: number) => void;
   onItemEditingChange?: (id: number, editing: boolean) => void;
 }) {
-  const { setNodeRef } = useDroppable({ id: "uncategorized" });
+  const { setNodeRef, isOver } = useDroppable({ id: "uncategorized" });
+
+  // Empty and only visible because a drag is in progress: a thin labeled
+  // drop line, not a tall empty box.
+  if (items.length === 0) {
+    return (
+      <div ref={setNodeRef} className="flex items-center gap-2 px-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 shrink-0">
+          Geen categorie
+        </span>
+        <div
+          className={`flex-1 rounded border-2 border-dashed transition-all ${
+            isOver ? "h-8 border-blue-400 bg-blue-100/70" : "h-2 border-gray-300"
+          }`}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
       ref={setNodeRef}
-      className="space-y-2 min-h-[60px] p-3 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/30"
+      className={`space-y-2 p-3 rounded-lg transition-colors ${
+        isDragActive && isOver
+          ? "bg-blue-100/60 ring-2 ring-blue-300"
+          : "bg-gray-50/30 border-2 border-dashed border-gray-200"
+      }`}
     >
-      {items.length === 0 ? (
-        <p className="text-sm text-gray-400 italic text-center py-2">
-          Sleep items hierheen om uit categorie te halen
-        </p>
-      ) : (
-        items.map((item) => (
-          <DraggableGroceryItem
-            key={item.id}
-            item={item}
-            onToggleBought={() => onToggleBought(item.id)}
-            onRename={(newName) => onRenameItem(item.id, newName)}
-            onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
-          />
-        ))
-      )}
+      {items.map((item) => (
+        <DraggableGroceryItem
+          key={item.id}
+          item={item}
+          onToggleBought={() => onToggleBought(item.id)}
+          onRename={(newName) => onRenameItem(item.id, newName)}
+          onDelete={() => onDeleteItem(item.id)}
+          onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
+        />
+      ))}
     </div>
   );
 }
@@ -244,8 +407,8 @@ function DroppableCategory({
   onDelete,
   onRenameItem,
   onAdd,
+  onDeleteItem,
   onItemEditingChange,
-  isUncategorized = false,
 }: {
   id: string;
   title: string;
@@ -254,26 +417,23 @@ function DroppableCategory({
   onDelete?: () => void;
   onRenameItem: (groceryId: number, newName: string) => void;
   onAdd?: () => void;
+  onDeleteItem: (groceryId: number) => void;
   onItemEditingChange?: (id: number, editing: boolean) => void;
-  isUncategorized?: boolean;
 }) {
-  const { setNodeRef } = useDroppable({ id });
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const isEmpty = items.length === 0;
 
   return (
     <div
       ref={setNodeRef}
-      className={`space-y-2 p-3 rounded-lg ${
-        isUncategorized ? "bg-gray-50/50" : "bg-blue-50/30 border border-blue-100"
-      }`}
+      className={`p-3 rounded-lg border transition-colors ${
+        isOver
+          ? "bg-blue-100/60 border-blue-300 ring-2 ring-blue-300"
+          : "bg-blue-50/30 border-blue-100"
+      } ${isEmpty ? "py-2" : "space-y-2"}`}
     >
       <div className="flex items-center justify-between px-2">
-        <h3
-          className={`text-sm font-semibold uppercase tracking-wide ${
-            isUncategorized ? "text-gray-600" : "text-blue-900"
-          }`}
-        >
-          {title}
-        </h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-blue-900">{title}</h3>
         <div className="flex items-center gap-1">
           {onAdd && (
             <Button
@@ -291,6 +451,7 @@ function DroppableCategory({
               variant="ghost"
               size="sm"
               onClick={onDelete}
+              aria-label={`Categorie ${title} verwijderen`}
               className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
             >
               <Trash2 className="h-3 w-3" />
@@ -298,21 +459,28 @@ function DroppableCategory({
           )}
         </div>
       </div>
-      <div className="space-y-2">
-        {items.length === 0 ? (
-          <p className="text-sm text-gray-400 italic px-2 py-4 text-center">Sleep items hierheen</p>
-        ) : (
-          items.map((item) => (
+      {isEmpty ? (
+        // Compact empty category: just a thin dashed drop line under the
+        // header that grows and highlights while a drag hovers it.
+        <div
+          className={`mx-2 mt-1 rounded border-2 border-dashed transition-all ${
+            isOver ? "h-8 border-blue-400 bg-blue-100/70" : "h-2 border-blue-200"
+          }`}
+        />
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
             <DraggableGroceryItem
               key={item.id}
               item={item}
               onToggleBought={() => onToggleBought(item.id)}
               onRename={(newName) => onRenameItem(item.id, newName)}
+              onDelete={() => onDeleteItem(item.id)}
               onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
             />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -377,6 +545,7 @@ export default function GroceryList({
   onDeleteCategory,
   onRenameItem,
   onAddToCategory,
+  onDeleteItem,
   onClearBought,
   isClearingBought = false,
   showCategories = true,
@@ -385,6 +554,9 @@ export default function GroceryList({
   const listRef = useRef<HTMLDivElement>(null);
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  // Non-empty category pending delete confirmation (empty ones delete
+  // immediately, no dialog).
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const editingIdsRef = useRef<Set<number>>(new Set());
 
   const handleItemEditingChange = (id: number, editing: boolean) => {
@@ -408,6 +580,8 @@ export default function GroceryList({
         distance: 8,
       },
     }),
+    // The 250ms hold delay distinguishes a drag from a scroll or a
+    // horizontal swipe-to-delete gesture on touch devices. Keep it.
     useSensor(TouchSensor, {
       activationConstraint: {
         delay: 250,
@@ -451,6 +625,17 @@ export default function GroceryList({
     onDragEnd(groceryId, categoryId);
   };
 
+  // A non-empty category asks for confirmation first; an empty one (counting
+  // bought items too — they'd silently lose their category) deletes directly.
+  const requestDeleteCategory = (category: Category) => {
+    const hasItems = groceryList.some((item) => item.categoryId === category.id);
+    if (hasItems) {
+      setCategoryToDelete(category);
+    } else {
+      onDeleteCategory(category.id);
+    }
+  };
+
   // Checked-off items leave their category groups entirely and render in a
   // single collapsed section at the bottom, most-recently-checked first.
   const uncheckedItems = groceryList.filter((item) => !item.bought);
@@ -466,6 +651,7 @@ export default function GroceryList({
   }));
   // Don't filter out empty categories - show all categories
 
+  const isDragActive = activeDragId !== null;
   const activeItem = groceryList.find((item) => item.id === activeDragId);
 
   // Render list content (common for both draggable and non-draggable modes)
@@ -499,19 +685,23 @@ export default function GroceryList({
                 title={category.name}
                 items={items}
                 onToggleBought={(id) => onToggleBought(id, true)}
-                onDelete={() => onDeleteCategory(category.id)}
+                onDelete={() => requestDeleteCategory(category)}
                 onRenameItem={onRenameItem}
                 onAdd={onAddToCategory ? () => onAddToCategory(category.id) : undefined}
+                onDeleteItem={onDeleteItem}
                 onItemEditingChange={handleItemEditingChange}
               />
             ))}
 
-          {/* Uncategorized Section - at the bottom, without title - only show when categories are enabled and there are items or categories */}
-          {showCategories && (uncategorizedItems.length > 0 || categories.length > 0) && (
+          {/* Uncategorized zone - only while it has items, or as a thin
+              labeled drop line while a drag is in progress */}
+          {showCategories && (uncategorizedItems.length > 0 || isDragActive) && (
             <UncategorizedItems
               items={uncategorizedItems}
+              isDragActive={isDragActive}
               onToggleBought={(id) => onToggleBought(id, true)}
               onRenameItem={onRenameItem}
+              onDeleteItem={onDeleteItem}
               onItemEditingChange={handleItemEditingChange}
             />
           )}
@@ -525,6 +715,7 @@ export default function GroceryList({
                   item={item}
                   onToggleBought={() => onToggleBought(item.id, true)}
                   onRename={(newName) => onRenameItem(item.id, newName)}
+                  onDelete={() => onDeleteItem(item.id)}
                   onEditingChange={(editing) => handleItemEditingChange(item.id, editing)}
                 />
               ))}
@@ -539,6 +730,35 @@ export default function GroceryList({
           />
         </>
       )}
+
+      {/* Confirmation for deleting a category that still has items */}
+      <AlertDialog
+        open={categoryToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setCategoryToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Categorie verwijderen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Items blijven bestaan en worden ongecategoriseerd.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (categoryToDelete) onDeleteCategory(categoryToDelete.id);
+                setCategoryToDelete(null);
+              }}
+            >
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 

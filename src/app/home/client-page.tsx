@@ -324,6 +324,53 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     inputRef.current?.focus();
   };
 
+  // Swipe-to-delete: remove a single item optimistically, with the same
+  // undo-toast pattern as clearing the Afgevinkt section.
+  const handleDeleteItem = async (groceryId: number) => {
+    // A negative id is an optimistic temp item whose create is still in
+    // flight; there is no server row to delete yet.
+    if (groceryId < 0) return;
+    const item = groceryList.find((i) => i.id === groceryId);
+    if (!item) return;
+
+    const restoreSnapshot = [
+      {
+        name: item.name,
+        categoryId: item.categoryId,
+        personal: item.userId !== null,
+        bought: item.bought ?? false,
+      },
+    ];
+
+    updateView(viewKey, (data) => ({
+      ...data,
+      items: data.items.filter((i) => i.id !== groceryId),
+    }));
+
+    try {
+      await deleteItems([groceryId]);
+      toast.success(`"${item.name}" verwijderd`, {
+        action: {
+          label: "Ongedaan maken",
+          onClick: async () => {
+            try {
+              await restoreItems(restoreSnapshot);
+              fetchData(viewKey);
+            } catch (error) {
+              console.error("Failed to restore item:", error);
+              toast.error("Herstellen mislukt");
+            }
+          },
+        },
+      });
+    } catch (error) {
+      // Revert: put the item back where it was.
+      updateView(viewKey, (data) => ({ ...data, items: [...data.items, item] }));
+      console.error("Failed to delete item:", error);
+      toast.error("Verwijderen mislukt");
+    }
+  };
+
   const handleRenameItem = async (groceryId: number, newName: string) => {
     try {
       await updateGroceryName(groceryId, newName);
@@ -390,6 +437,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           onDeleteCategory={handleDeleteCategory}
           onRenameItem={handleRenameItem}
           onAddToCategory={handleAddToCategory}
+          onDeleteItem={handleDeleteItem}
           onClearBought={handleClearBought}
           isClearingBought={isClearingBought}
           showCategories={true}

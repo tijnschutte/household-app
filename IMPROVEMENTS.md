@@ -200,6 +200,22 @@ These change data flow and action signatures that later WPs build on.
 
 **Acceptance**: only one form visible at a time; both primary buttons clearly enabled; entering a lowercase code still joins; sign-out reachable but not the first thing in the reading order; no client-supplied userId in the two actions; with a valid JWT for a nonexistent user id, every action fails with "Niet ingelogd" instead of a Prisma error.
 
+### WP-10: Checked items stay in place (LAST WP — revises WP-4's layout, keeps its data model)
+
+**Decision (user, 2026-07-06)**: checking off should give a live overview of the shopping trip — struck-through items stay visible where they are ("that aisle is done, it's in my basket"), with one bulk clear at the end. The WP-4 collapsed "Afgevinkt" section hides this overview; replace that _presentation_. Everything else from WP-4 stays: tap = toggle `bought` (optimistic, synced via polling), clear = `deleteItems` + "Ongedaan maken" undo via `restoreItems`.
+
+**Files**: `src/components/house/grocery-list.tsx`, `src/app/home/client-page.tsx`.
+
+**Spec**:
+
+1. **Remove the collapsed CheckedSection.** Checked items render in their own category group (and uncategorized zone), sorted to sink below the unchecked items within that group, struck-through + muted + filled check circle. Tap to un-check stays. Keep the WP-6 swipe-to-delete working on checked rows too.
+2. **Category headers count only unchecked items** (e.g. `Groente (2)` when 2 of 5 are unchecked) — the header count is "what's left", matching the shopping mental model. A category whose items are ALL checked is not "empty" (no thin drop-line collapse; its checked rows keep it expanded).
+3. **Clear-all affordance**: when ≥1 item is checked in the current view, show a slim bar docked above the footer add-bar (inside the footer container, full width, subtle background): `n in je mandje` left, a `Wissen` button right. Tapping Wissen deletes all bought items in the current view with the existing undo toast. Bar animates in/out (height/opacity, ~150ms). No AlertDialog — undo covers mistakes.
+4. **Drag**: checked items are not draggable (pointless mid-trip; avoids accidental drags) — hide the drag handle on checked rows.
+5. Polling/optimistic semantics unchanged. Style per WP-7's design language (this runs after WP-7 — flat rows, no shadows).
+
+**Acceptance**: checking an item strikes it through in place and sinks it within its group; header counts show remaining-unchecked; the "n in je mandje / Wissen" bar appears only when something is checked and clears the current view's bought items with undo; checked rows can't be dragged but can be swiped away; two-browser sync still shows checkmarks within one poll.
+
 ## Sequencing & parallelism
 
 ```
