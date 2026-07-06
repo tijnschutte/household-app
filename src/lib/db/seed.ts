@@ -1,23 +1,25 @@
-import { PrismaClient, Prisma } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
-const userData: Prisma.UserCreateInput[] = [
-  {
-    name: 'Tijn',
-    household: {
-      create: {
-          name: 'CD26'
-        },
-    },
-    password: 'password',
-  },
-]
-
 export async function main() {
-  for (const u of userData) {
-    await prisma.user.create({ data: u })
-  }
+  const password = await bcrypt.hash('password', 10)
+  await prisma.user.upsert({
+    where: { name: 'Tijn' },
+    update: {},
+    create: {
+      name: 'Tijn',
+      password,
+      household: {
+        create: {
+          name: 'CD26',
+          secret: 'LOCALDEV1234',
+        },
+      },
+    },
+  })
+  console.log('Seeded: user "Tijn" (password "password"), household "CD26" (code LOCALDEV1234)')
 }
 
 main()
