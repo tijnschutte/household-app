@@ -2,7 +2,7 @@
 
 import { Grocery, Household, Category } from "@prisma/client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { User, House, Plus, Info, LogOut, Tag } from "lucide-react";
+import { User, House, Plus, Info, LogOut, Tag, Loader2 } from "lucide-react";
 import { getHomeData } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
@@ -119,6 +119,10 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   // deleted (locally or by a poll refresh) silently falls back to
   // "Geen categorie" instead of pointing at a stale id.
   const targetCategory = categories.find((c) => c.id === targetCategoryId) ?? null;
+  // Drives the "n in je mandje / Wissen" bar docked above the add-bar
+  // (WP-10): checked items stay visible in place, so clearing them is a
+  // deliberate, separate action rather than tucked inside a collapsed section.
+  const boughtCount = groceryList.filter((item) => item.bought).length;
 
   const fetchData = useCallback(async (view: ViewKey, options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -467,22 +471,11 @@ export default function HouseholdClientPage({ household, initialData }: Househol
         </Button>
       </header>
 
-      {/* Sub-header - list-view segmented control; navigation, not an action,
-          so it sits under the header rather than the footer. */}
-      <div className="w-full shrink-0 border-b border-border bg-background px-4 py-2">
-        <div className="w-full max-w-2xl mx-auto">
-          <ViewToggle showPersonal={showPersonal} onToggle={handleToggleView} />
-        </div>
-      </div>
-
       {/* Main scrollable content area */}
       <main
         ref={mainRef}
         className="flex-1 overflow-y-auto w-full max-w-2xl mx-auto px-4 pt-4 pb-6"
       >
-        <div className="mb-4 flex justify-end">
-          <AddCategory showPersonal={showPersonal} onCategoryAdded={() => fetchData(viewKey)} />
-        </div>
         <GroceryList
           groceryList={groceryList}
           categories={categories}
@@ -493,16 +486,56 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           onRenameItem={handleRenameItem}
           onAddToCategory={handleAddToCategory}
           onDeleteItem={handleDeleteItem}
-          onClearBought={handleClearBought}
-          isClearingBought={isClearingBought}
           showCategories={true}
           busyRef={busyRef}
         />
+        {/* Quiet "add category" affordance at the very end of the list (the
+            user's thumb lives at the bottom of the screen). Same dialog as
+            before, just a full-width muted ghost row as its trigger. */}
+        <AddCategory
+          showPersonal={showPersonal}
+          onCategoryAdded={() => fetchData(viewKey)}
+          trigger={
+            <Button
+              variant="ghost"
+              className="mt-2 h-11 w-full justify-start gap-2 px-1 text-sm font-normal text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="h-4 w-4" />
+              Categorie toevoegen
+            </Button>
+          }
+        />
       </main>
 
-      {/* Footer - Fixed at bottom, add bar only. Safe-area aware for the iOS
-          home indicator. */}
+      {/* Footer - Fixed at bottom: an optional clear-all bar, the add bar,
+          then the list-view toggle (thumb-reachable navigation — "buttons at
+          the top of a phone app are unreachable"). Safe-area aware for the
+          iOS home indicator. */}
       <footer className="w-full shrink-0 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {/* Clear-all bar (WP-10): checked items stay visible in their
+            categories, so this is the one place to bulk-clear them. Only
+            shown while at least one item in the current view is checked;
+            animates height/opacity in and out. */}
+        <div
+          className={`mx-auto w-full max-w-2xl overflow-hidden transition-all duration-150 ease-out ${
+            boughtCount > 0 ? "mb-2 max-h-12 opacity-100" : "mb-0 max-h-0 opacity-0"
+          }`}
+        >
+          <div className="flex h-10 items-center justify-between rounded-lg bg-secondary px-3">
+            <span className="text-sm text-muted-foreground">{boughtCount} in je mandje</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleClearBought}
+              disabled={isClearingBought}
+              className="h-8 gap-1.5 px-2.5 text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              {isClearingBought && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Wissen
+            </Button>
+          </div>
+        </div>
         <div className="relative flex flex-row justify-center items-center gap-2 w-full max-w-2xl mx-auto">
           <div className="flex flex-1 min-w-0 items-center gap-1 h-12 bg-card rounded-lg border border-input focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/20 transition-colors pl-1.5">
             {/* Category chip: where the next added item lands. Sticky across
@@ -572,6 +605,9 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           >
             <Plus />
           </Button>
+        </div>
+        <div className="mx-auto mt-2 w-full max-w-2xl">
+          <ViewToggle showPersonal={showPersonal} onToggle={handleToggleView} />
         </div>
       </footer>
     </div>

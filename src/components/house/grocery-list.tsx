@@ -1,16 +1,7 @@
 "use client";
 
 import { Grocery, Category } from "@prisma/client";
-import {
-  ShoppingCart,
-  Trash2,
-  Pencil,
-  GripVertical,
-  Check,
-  ChevronDown,
-  Loader2,
-  Plus,
-} from "lucide-react";
+import { ShoppingCart, Trash2, Pencil, GripVertical, Check, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input";
 import {
@@ -52,8 +43,6 @@ type GroceryListProps = {
   onAddToCategory?: (categoryId: number) => void;
   /** Swipe-to-delete on a row: delete this single item (with undo toast upstream). */
   onDeleteItem: (groceryId: number) => void;
-  onClearBought: () => void;
-  isClearingBought?: boolean;
   showCategories?: boolean;
   /** Set to true while a drag or inline rename is in progress, so callers (e.g. polling) can skip clobbering it. */
   busyRef?: React.MutableRefObject<boolean>;
@@ -92,11 +81,16 @@ function DraggableGroceryItem({
   onDelete: () => void;
   onEditingChange?: (editing: boolean) => void;
 }) {
+  const bought = item.bought ?? false;
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(item.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Checked rows can't be dragged (pointless mid-trip, avoids accidental
+  // drags) — disabled here (not just handle-hidden) so it holds even if
+  // something else ever renders a handle for a bought row.
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.id,
+    disabled: bought,
   });
 
   // Swipe-to-delete state. The gesture is tracked with pointer events on the
@@ -294,53 +288,41 @@ function DraggableGroceryItem({
           ${isDragging ? "opacity-0" : ""}
         `}
       >
-        <CheckCircle bought={false} />
-        <span className="truncate w-full text-base min-w-0 first-letter:uppercase text-gray-800 font-medium">
+        <CheckCircle bought={bought} />
+        <span
+          className={`truncate w-full text-base min-w-0 first-letter:uppercase ${
+            bought ? "text-gray-400 line-through" : "text-gray-800 font-medium"
+          }`}
+        >
           {item.name}
         </span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            startEditing();
-          }}
-          className="h-11 w-11 -my-2 flex items-center justify-center hover:bg-gray-100 rounded shrink-0"
-        >
-          <Pencil className="w-3.5 h-3.5 text-gray-400" />
-        </button>
-        <div
-          {...listeners}
-          {...attributes}
-          data-drag-handle
-          className="h-11 w-11 -my-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 shrink-0"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical className="w-4 h-4" />
-        </div>
+        {/* Checked rows stay minimal: circle + struck name only. Renaming a
+            checked item is pointless, and it can't be dragged (see
+            `disabled: bought` above) so the handle is hidden too. Swipe
+            still works — it's wired on the row body, not these buttons. */}
+        {!bought && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              startEditing();
+            }}
+            className="h-11 w-11 -my-2 flex items-center justify-center hover:bg-gray-100 rounded shrink-0"
+          >
+            <Pencil className="w-3.5 h-3.5 text-gray-400" />
+          </button>
+        )}
+        {!bought && (
+          <div
+            {...listeners}
+            {...attributes}
+            data-drag-handle
+            className="h-11 w-11 -my-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="w-4 h-4" />
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-// A checked-off item rendered inside the collapsed "Afgevinkt" section: no
-// drag handle, no rename affordance — just struck-through, muted, tap to
-// restore (un-check). categoryId is left untouched while bought, so unchecking
-// puts the item straight back into its old category group.
-function CheckedGroceryItem({
-  item,
-  onToggleBought,
-}: {
-  item: GroceryWithCategory;
-  onToggleBought: () => void;
-}) {
-  return (
-    <div
-      onClick={onToggleBought}
-      className="flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer select-none active:bg-gray-50 transition-colors"
-    >
-      <CheckCircle bought />
-      <span className="truncate w-full text-base min-w-0 first-letter:uppercase text-gray-400 line-through">
-        {item.name}
-      </span>
     </div>
   );
 }
@@ -353,17 +335,19 @@ function UncategorizedItems({
   onDeleteItem,
   onItemEditingChange,
 }: {
+  /** Both checked and unchecked items — unchecked first, checked sunk below (WP-10). */
   items: GroceryWithCategory[];
   isDragActive: boolean;
-  onToggleBought: (id: number) => void;
+  onToggleBought: (id: number, bought: boolean) => void;
   onRenameItem: (groceryId: number, newName: string) => void;
   onDeleteItem: (groceryId: number) => void;
   onItemEditingChange?: (id: number, editing: boolean) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: "uncategorized" });
 
-  // Empty and only visible because a drag is in progress: a thin labeled
-  // drop line, not a tall empty box.
+  // Empty (no items at all, checked or unchecked) and only visible because a
+  // drag is in progress: a thin labeled drop line, not a tall empty box. A
+  // zone that's fully checked still has items, so it stays expanded.
   if (items.length === 0) {
     return (
       <div ref={setNodeRef} className="flex items-center gap-2 px-1 py-3">
@@ -390,7 +374,7 @@ function UncategorizedItems({
         <DraggableGroceryItem
           key={item.id}
           item={item}
-          onToggleBought={() => onToggleBought(item.id)}
+          onToggleBought={() => onToggleBought(item.id, !(item.bought ?? false))}
           onRename={(newName) => onRenameItem(item.id, newName)}
           onDelete={() => onDeleteItem(item.id)}
           onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
@@ -404,6 +388,7 @@ function DroppableCategory({
   id,
   title,
   items,
+  uncheckedCount,
   onToggleBought,
   onDelete,
   onRenameItem,
@@ -413,8 +398,11 @@ function DroppableCategory({
 }: {
   id: string;
   title: string;
+  /** Both checked and unchecked items — unchecked first, checked sunk below (WP-10). */
   items: GroceryWithCategory[];
-  onToggleBought: (id: number) => void;
+  /** Header shows what's left to buy, not the total (WP-10). */
+  uncheckedCount: number;
+  onToggleBought: (id: number, bought: boolean) => void;
   onDelete?: () => void;
   onRenameItem: (groceryId: number, newName: string) => void;
   onAdd?: () => void;
@@ -422,6 +410,8 @@ function DroppableCategory({
   onItemEditingChange?: (id: number, editing: boolean) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  // A category whose items are all checked still has items — it stays
+  // expanded, not collapsed to the empty drop-line (WP-10).
   const isEmpty = items.length === 0;
 
   return (
@@ -431,7 +421,7 @@ function DroppableCategory({
       <div className="flex items-center justify-between px-1 pb-1.5">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
-          <span className="ml-1.5 font-normal normal-case text-gray-400">{items.length}</span>
+          <span className="ml-1.5 font-normal normal-case text-gray-400">{uncheckedCount}</span>
         </h3>
         <div className="flex items-center gap-0.5">
           {onAdd && (
@@ -472,63 +462,12 @@ function DroppableCategory({
             <DraggableGroceryItem
               key={item.id}
               item={item}
-              onToggleBought={() => onToggleBought(item.id)}
+              onToggleBought={() => onToggleBought(item.id, !(item.bought ?? false))}
               onRename={(newName) => onRenameItem(item.id, newName)}
               onDelete={() => onDeleteItem(item.id)}
               onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
             />
           ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Collapsed-by-default section for checked-off items, sunk to the very
-// bottom of the list. Expand/collapse is local UI state, never persisted.
-function CheckedSection({
-  items,
-  onToggleBought,
-  onClear,
-  isClearing,
-}: {
-  items: GroceryWithCategory[];
-  onToggleBought: (id: number) => void;
-  onClear: () => void;
-  isClearing: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  if (items.length === 0) return null;
-
-  return (
-    <div className="py-2">
-      <button
-        onClick={() => setIsOpen((open) => !open)}
-        className="flex items-center justify-between w-full min-h-11 px-1 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500"
-      >
-        <span>Afgevinkt ({items.length})</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-      </button>
-
-      {isOpen && (
-        <div className="space-y-1 mt-1">
-          {items.map((item) => (
-            <CheckedGroceryItem
-              key={item.id}
-              item={item}
-              onToggleBought={() => onToggleBought(item.id)}
-            />
-          ))}
-          <Button
-            variant="ghost"
-            onClick={onClear}
-            disabled={isClearing}
-            className="w-full h-11 mt-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-          >
-            {isClearing && <Loader2 className="w-4 h-4 animate-spin" />}
-            Wis afgevinkte items ({items.length})
-          </Button>
         </div>
       )}
     </div>
@@ -545,8 +484,6 @@ export default function GroceryList({
   onRenameItem,
   onAddToCategory,
   onDeleteItem,
-  onClearBought,
-  isClearingBought = false,
   showCategories = true,
   busyRef,
 }: GroceryListProps) {
@@ -635,20 +572,26 @@ export default function GroceryList({
     }
   };
 
-  // Checked-off items leave their category groups entirely and render in a
-  // single collapsed section at the bottom, most-recently-checked first.
-  const uncheckedItems = groceryList.filter((item) => !item.bought);
-  const checkedItems = groceryList
-    .filter((item) => item.bought)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  // Checked items stay inside their own category group (WP-10): within a
+  // group, unchecked items come first (existing order), checked items sink
+  // below, most-recently-checked first. The header count is what's left to
+  // buy, so it's tracked separately from the (checked + unchecked) items
+  // that actually get rendered.
+  const sortGroup = (items: GroceryWithCategory[]) => {
+    const unchecked = items.filter((item) => !item.bought);
+    const checked = items
+      .filter((item) => item.bought)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return { items: [...unchecked, ...checked], uncheckedCount: unchecked.length };
+  };
 
-  // Group unchecked items by category
-  const uncategorizedItems = uncheckedItems.filter((item) => !item.categoryId);
+  const uncategorizedGroup = sortGroup(groceryList.filter((item) => !item.categoryId));
   const categorizedItems = categories.map((category) => ({
     category,
-    items: uncheckedItems.filter((item) => item.categoryId === category.id),
+    ...sortGroup(groceryList.filter((item) => item.categoryId === category.id)),
   }));
-  // Don't filter out empty categories - show all categories
+  // Don't filter out empty categories - show all categories (and a category
+  // that's fully checked isn't "empty" either — sortGroup keeps its items).
 
   const isDragActive = activeDragId !== null;
   const activeItem = groceryList.find((item) => item.id === activeDragId);
@@ -662,31 +605,30 @@ export default function GroceryList({
         </div>
       )}
 
-      {!isLoading &&
-        uncheckedItems.length === 0 &&
-        checkedItems.length === 0 &&
-        categories.length === 0 && (
-          <div className="flex flex-col items-center justify-center p-12 text-gray-400">
-            <ShoppingCart className="w-16 h-16 mb-4 opacity-30" />
-            <p className="text-lg font-medium">Geen items</p>
-            <p className="text-sm mt-1">Voeg je eerste item toe!</p>
-          </div>
-        )}
+      {!isLoading && groceryList.length === 0 && categories.length === 0 && (
+        <div className="flex flex-col items-center justify-center p-12 text-gray-400">
+          <ShoppingCart className="w-16 h-16 mb-4 opacity-30" />
+          <p className="text-lg font-medium">Geen items</p>
+          <p className="text-sm mt-1">Voeg je eerste item toe!</p>
+        </div>
+      )}
 
       {!isLoading && (
         // Groups (categories, uncategorized, checked) are flat: a small-caps
         // label, plain rows under it, and a single hairline between groups
         // supplied by divide-y here — no boxes-in-boxes.
         <div className="divide-y divide-gray-200">
-          {/* Categorized Sections - Show all categories, even empty ones */}
+          {/* Categorized Sections - Show all categories, even ones that are
+              empty or fully checked (sortGroup never drops checked items) */}
           {showCategories &&
-            categorizedItems.map(({ category, items }) => (
+            categorizedItems.map(({ category, items, uncheckedCount }) => (
               <DroppableCategory
                 key={category.id}
                 id={`category-${category.id}`}
                 title={category.name}
                 items={items}
-                onToggleBought={(id) => onToggleBought(id, true)}
+                uncheckedCount={uncheckedCount}
+                onToggleBought={onToggleBought}
                 onDelete={() => requestDeleteCategory(category)}
                 onRenameItem={onRenameItem}
                 onAdd={onAddToCategory ? () => onAddToCategory(category.id) : undefined}
@@ -695,13 +637,14 @@ export default function GroceryList({
               />
             ))}
 
-          {/* Uncategorized zone - only while it has items, or as a thin
-              labeled drop line while a drag is in progress */}
-          {showCategories && (uncategorizedItems.length > 0 || isDragActive) && (
+          {/* Uncategorized zone - only while it has items (checked or
+              unchecked), or as a thin labeled drop line while a drag is in
+              progress */}
+          {showCategories && (uncategorizedGroup.items.length > 0 || isDragActive) && (
             <UncategorizedItems
-              items={uncategorizedItems}
+              items={uncategorizedGroup.items}
               isDragActive={isDragActive}
-              onToggleBought={(id) => onToggleBought(id, true)}
+              onToggleBought={onToggleBought}
               onRenameItem={onRenameItem}
               onDeleteItem={onDeleteItem}
               onItemEditingChange={handleItemEditingChange}
@@ -709,13 +652,13 @@ export default function GroceryList({
           )}
 
           {/* Simple list when categories are disabled */}
-          {!showCategories && uncategorizedItems.length > 0 && (
+          {!showCategories && uncategorizedGroup.items.length > 0 && (
             <div className="space-y-1 py-3">
-              {uncategorizedItems.map((item) => (
+              {uncategorizedGroup.items.map((item) => (
                 <DraggableGroceryItem
                   key={item.id}
                   item={item}
-                  onToggleBought={() => onToggleBought(item.id, true)}
+                  onToggleBought={() => onToggleBought(item.id, !(item.bought ?? false))}
                   onRename={(newName) => onRenameItem(item.id, newName)}
                   onDelete={() => onDeleteItem(item.id)}
                   onEditingChange={(editing) => handleItemEditingChange(item.id, editing)}
@@ -723,13 +666,6 @@ export default function GroceryList({
               ))}
             </div>
           )}
-
-          <CheckedSection
-            items={checkedItems}
-            onToggleBought={(id) => onToggleBought(id, false)}
-            onClear={onClearBought}
-            isClearing={isClearingBought}
-          />
         </div>
       )}
 

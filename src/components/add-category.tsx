@@ -20,9 +20,11 @@ import { toast } from "sonner";
 type AddCategoryProps = {
   showPersonal: boolean;
   onCategoryAdded: () => void;
+  /** Custom dialog trigger, rendered via asChild. Defaults to the outline button. */
+  trigger?: React.ReactNode;
 };
 
-export default function AddCategory({ showPersonal, onCategoryAdded }: AddCategoryProps) {
+export default function AddCategory({ showPersonal, onCategoryAdded, trigger }: AddCategoryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -54,10 +56,12 @@ export default function AddCategory({ showPersonal, onCategoryAdded }: AddCatego
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Plus className="h-4 w-4" />
-          Categorie toevoegen
-        </Button>
+        {trigger ?? (
+          <Button variant="outline" size="sm" className="gap-2">
+            <Plus className="h-4 w-4" />
+            Categorie toevoegen
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
