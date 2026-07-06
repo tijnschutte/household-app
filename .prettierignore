@@ -1,0 +1,5 @@
+# Generated PWA build output (service worker, workbox runtime) — regenerated
+# on every build; formatting/committing changes to it is meaningless churn.
+public/sw.js
+public/workbox-*.js
+public/swe-worker-*.js
