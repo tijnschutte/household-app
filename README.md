@@ -29,13 +29,6 @@ Installable as a PWA; the target device is a phone in a shopping aisle, not a de
 
 Next.js 15 (App Router) · React 19 · TypeScript · Prisma + PostgreSQL (Neon) · NextAuth 5 · Tailwind CSS 4 + shadcn/ui · dnd-kit · Zod · deployed on Vercel, package-managed with Bun.
 
-## A few things worth a second look
-
-- **Every mutation is scoped server-side to the caller's session** — no server action trusts a client-supplied user or household ID. `requireUser()` (`src/lib/session.ts`) derives scope from the auth token, and a deleted-user-but-valid-JWT edge case fails clean instead of throwing a raw DB error.
-- **Optimistic UI with real rollback**: adding an item, checking it off, or deleting inserts/updates local state immediately and reconciles with the server response — errors roll the UI back and surface a toast, they don't just get swallowed.
-- **Polling that doesn't fight the user**: background sync skips applying an update while a drag or inline edit is in flight, and skips re-rendering entirely when the fetched payload is unchanged.
-- **Migration discipline over a live database**: schema changes are written as explicit migration diffs and deployed with `prisma migrate deploy` / `db push`, not `db push` blind — because this app has real user data in it.
-
 ## Running it locally
 
 ```bash
