@@ -2,7 +2,7 @@
 
 import { Grocery, Household, Category } from "@prisma/client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { User, House, Plus, Info, LogOut, Tag, Loader2 } from "lucide-react";
+import { User, House, Plus, Tag, Loader2 } from "lucide-react";
 import { getHomeData } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
@@ -19,8 +19,6 @@ import {
 import GroceryList from "@/src/components/house/grocery-list";
 import AddCategory from "@/src/components/add-category";
 import { toast } from "sonner";
-import Link from "next/link";
-import { signOut } from "next-auth/react";
 
 type GroceryWithCategory = Grocery & { category: Category | null };
 
@@ -444,32 +442,20 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   return (
     <div className="h-full w-full flex flex-col">
       {/* Header - Fixed at top, flat brand blue, no gradient/drop-shadow.
-          Plain flex row (no absolutely-positioned children) so the title can
-          never overlap the side buttons; both sides are equal-width icon
-          buttons, so the title stays visually centered and truncates. */}
+          Sign-out and household info moved to the Huis tab, so the header is
+          just the title. */}
       <header className="flex h-14 w-full shrink-0 items-center bg-primary px-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => signOut()}
-          className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
-        >
-          <LogOut className="w-5 h-5" />
-        </Button>
         <h2 className="min-w-0 flex-1 truncate text-center text-lg font-semibold tracking-wide text-primary-foreground">
           {showPersonal ? "Persoonlijk" : household.name}
         </h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          asChild
-          className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
-        >
-          <Link href="/household-info">
-            <Info className="w-5 h-5" />
-          </Link>
-        </Button>
       </header>
+
+      {/* List-view toggle directly under the header: it's navigation (which
+          list you're looking at), kept away from the footer now that the
+          platform tab bar lives down there too. */}
+      <div className="w-full max-w-2xl mx-auto shrink-0 px-4 pt-3">
+        <ViewToggle showPersonal={showPersonal} onToggle={handleToggleView} />
+      </div>
 
       {/* Main scrollable content area */}
       <main
@@ -507,11 +493,10 @@ export default function HouseholdClientPage({ household, initialData }: Househol
         />
       </main>
 
-      {/* Footer - Fixed at bottom: an optional clear-all bar, the add bar,
-          then the list-view toggle (thumb-reachable navigation — "buttons at
-          the top of a phone app are unreachable"). Safe-area aware for the
-          iOS home indicator. */}
-      <footer className="w-full shrink-0 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* Footer - Fixed at bottom: an optional clear-all bar, then the add
+          bar. The platform tab bar renders below this and owns the iOS
+          safe-area inset. */}
+      <footer className="w-full shrink-0 border-t border-border bg-background px-4 py-3">
         {/* Clear-all bar (WP-10): checked items stay visible in their
             categories, so this is the one place to bulk-clear them. Only
             shown while at least one item in the current view is checked;
@@ -615,9 +600,6 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           >
             <Plus />
           </Button>
-        </div>
-        <div className="mx-auto mt-2 w-full max-w-2xl">
-          <ViewToggle showPersonal={showPersonal} onToggle={handleToggleView} />
         </div>
       </footer>
     </div>
