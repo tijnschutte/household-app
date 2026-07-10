@@ -18,12 +18,14 @@ model User {
 }
 
 model Household {
-  id         Int        @id @default(autoincrement())
-  name       String     @unique
-  secret     String?    @unique
-  members    User[]
-  Grocery    Grocery[]
-  categories Category[]
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  secret         String?         @unique
+  members        User[]
+  Grocery        Grocery[]
+  categories     Category[]
+  recurringItems RecurringItem[]
+  adjustments    Adjustment[]
 }
 
 model Category {
@@ -56,4 +58,51 @@ model Grocery {
 
   @@unique([name, householdId])
   @@unique([name, userId])
+}
+
+enum RecurringKind {
+  CONTRIBUTION
+  EXPENSE
+}
+
+// A recurring monthly line item in the household pot: either a member's
+// contribution (inleg) or a bill paid from the pot (uitgave). "Active" in a
+// given month m means activeFrom <= m && (activeTo == null || activeTo >= m).
+model RecurringItem {
+  id            Int           @id @default(autoincrement())
+  householdId   Int
+  household     Household     @relation(fields: [householdId], references: [id])
+  name          String
+  kind          RecurringKind
+  expectedCents Int
+  activeFrom    String // "YYYY-MM", inclusive
+  activeTo      String? // "YYYY-MM", inclusive; null = still active
+  entries       MonthEntry[]
+
+  @@unique([householdId, name, kind])
+}
+
+// Marks a RecurringItem as paid for a given month. Domain rule: entering an
+// amount IS the act of paying — there's no separate "paid" flag.
+model MonthEntry {
+  id              Int           @id @default(autoincrement())
+  recurringItemId Int
+  recurringItem   RecurringItem @relation(fields: [recurringItemId], references: [id], onDelete: Cascade)
+  month           String // "YYYY-MM"
+  amountCents     Int
+  paidAt          DateTime      @default(now())
+
+  @@unique([recurringItemId, month])
+}
+
+// A one-off correction to the pot for a given month ("rechttrekken"), on top
+// of the regular contributions/expenses.
+model Adjustment {
+  id          Int       @id @default(autoincrement())
+  householdId Int
+  household   Household @relation(fields: [householdId], references: [id])
+  month       String
+  amountCents Int // positive adds to the pot, negative removes
+  note        String?
+  createdAt   DateTime  @default(now())
 }

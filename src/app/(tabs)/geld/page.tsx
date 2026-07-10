@@ -1,10 +1,15 @@
 import { auth } from "@/src/lib/auth";
 import { redirect } from "next/navigation";
 import { getHouseholdById } from "@/src/lib/data";
-import PageHeader from "@/src/components/page-header";
-import { Wallet } from "lucide-react";
+import { getGeldMonth, getRecurringItems } from "@/src/lib/geld/data";
+import { currentMonth, isValidMonth } from "@/src/lib/geld/money";
+import GeldPageClient from "@/src/components/geld/geld-page-client";
 
-export default async function GeldPage() {
+export default async function GeldPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ maand?: string }>;
+}) {
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -17,19 +22,10 @@ export default async function GeldPage() {
     redirect("/household-setup");
   }
 
-  return (
-    <div className="flex h-full w-full flex-col">
-      <PageHeader title="Geld" />
-      <main className="flex w-full max-w-2xl mx-auto flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-4 py-4 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
-          <Wallet className="h-6 w-6 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium">Binnenkort</p>
-        <p className="max-w-xs text-sm text-muted-foreground">
-          Hier komt het maandoverzicht van {household.name}: vaste lasten, inleg en het saldo op de
-          gezamenlijke rekening.
-        </p>
-      </main>
-    </div>
-  );
+  const { maand } = await searchParams;
+  const month = maand && isValidMonth(maand) ? maand : currentMonth();
+
+  const [geldMonth, recurringItems] = await Promise.all([getGeldMonth(month), getRecurringItems()]);
+
+  return <GeldPageClient month={month} data={geldMonth} recurringItems={recurringItems} />;
 }
