@@ -22,11 +22,12 @@ const labelSchema = z
   .trim()
   .min(1, "Label is vereist")
   .max(40, "Label mag maximaal 40 karakters zijn");
-const valueSchema = z
+const usernameSchema = z.string().trim().max(100, "Gebruikersnaam mag maximaal 100 karakters zijn");
+const passwordSchema = z
   .string()
   .trim()
-  .min(1, "Waarde is vereist")
-  .max(200, "Waarde mag maximaal 200 karakters zijn");
+  .min(1, "Wachtwoord is vereist")
+  .max(200, "Wachtwoord mag maximaal 200 karakters zijn");
 
 // Verifies a client-supplied categoryId belongs to the caller's household
 // (null = uncategorized, always allowed).
@@ -188,19 +189,26 @@ export async function deleteDocCategory(id: number) {
 }
 
 /** Keyed on (householdId, label) — editing an existing label just updates its
- * value; a new label creates a new row. */
-export async function upsertKeyInfo(label: string, value: string) {
+ * username/password; a new label creates a new row. Empty/whitespace username
+ * is stored as null. */
+export async function upsertKeyInfo(label: string, username: string | null, password: string) {
   try {
     const { householdId } = await requireUser();
     if (!householdId) throw new Error("Je bent niet lid van een huishouden");
 
     const validLabel = labelSchema.parse(label);
-    const validValue = valueSchema.parse(value);
+    const validUsername = usernameSchema.parse(username ?? "") || null;
+    const validPassword = passwordSchema.parse(password);
 
     await prisma.keyInfo.upsert({
       where: { householdId_label: { householdId, label: validLabel } },
-      create: { householdId, label: validLabel, value: validValue },
-      update: { value: validValue },
+      create: {
+        householdId,
+        label: validLabel,
+        username: validUsername,
+        password: validPassword,
+      },
+      update: { username: validUsername, password: validPassword },
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

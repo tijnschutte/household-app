@@ -143,14 +143,15 @@ model Document {
   createdAt    DateTime     @default(now())
 }
 
-// A household-wide label/value pair for quick-reference info (e.g. "WiFi
-// wachtwoord"). Upserted by label, so label doubles as the natural key.
+// A household-wide password-list entry (e.g. the WiFi password). Upserted by
+// label, so label doubles as the natural key.
 model KeyInfo {
   id          Int       @id @default(autoincrement())
   householdId Int
   household   Household @relation(fields: [householdId], references: [id])
-  label       String // e.g. "WiFi wachtwoord"
-  value       String
+  label       String // e.g. "WiFi"
+  username    String? // optional account/user name shown alongside the label
+  password    String
 
   @@unique([householdId, label])
 }

@@ -19,7 +19,8 @@ export type DocCategoryRow = {
 export type KeyInfoRow = {
   id: number;
   label: string;
-  value: string;
+  username: string | null;
+  password: string;
 };
 
 export type DocsData = {
@@ -52,6 +53,7 @@ export async function getDocsData(): Promise<DocsData> {
     }),
     prisma.keyInfo.findMany({
       where: { householdId },
+      select: { id: true, label: true, username: true, password: true },
       orderBy: { label: "asc" },
     }),
   ]);
