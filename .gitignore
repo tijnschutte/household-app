@@ -7,6 +7,9 @@ dist/
 .vercel
 *.tsbuildinfo
 
+# Local dev file storage for the docs vault (src/lib/storage/local-disk.ts)
+.uploads/
+
 # macOS
 .DS_Store
 

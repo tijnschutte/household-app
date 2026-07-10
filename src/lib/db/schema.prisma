@@ -15,6 +15,7 @@ model User {
   household   Household? @relation(fields: [householdId], references: [id])
   groceries   Grocery[]
   categories  Category[]
+  documents   Document[]
 }
 
 model Household {
@@ -26,6 +27,9 @@ model Household {
   categories     Category[]
   recurringItems RecurringItem[]
   adjustments    Adjustment[]
+  documents      Document[]
+  docCategories  DocCategory[]
+  keyInfo        KeyInfo[]
 }
 
 model Category {
@@ -105,4 +109,48 @@ model Adjustment {
   amountCents Int // positive adds to the pot, negative removes
   note        String?
   createdAt   DateTime  @default(now())
+}
+
+// A user-created, household-scoped grouping for documents (mirrors the
+// grocery Category pattern). Deleting one moves its documents to
+// uncategorized ("Overig") via onDelete: SetNull.
+model DocCategory {
+  id          Int        @id @default(autoincrement())
+  name        String
+  householdId Int
+  household   Household  @relation(fields: [householdId], references: [id])
+  documents   Document[]
+
+  @@unique([name, householdId])
+}
+
+// A file in the household's document vault. The actual bytes live in
+// whichever FileStorage backend is active (src/lib/storage/) — this row is
+// just the pointer + metadata. storageKey is server-generated and never
+// client-supplied.
+model Document {
+  id           Int          @id @default(autoincrement())
+  householdId  Int
+  household    Household    @relation(fields: [householdId], references: [id])
+  name         String // display name, 1-60 chars
+  categoryId   Int? // null = uncategorized ("Overig")
+  category     DocCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  storageKey   String       @unique
+  contentType  String
+  sizeBytes    Int
+  uploadedById Int?
+  uploadedBy   User?        @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime     @default(now())
+}
+
+// A household-wide label/value pair for quick-reference info (e.g. "WiFi
+// wachtwoord"). Upserted by label, so label doubles as the natural key.
+model KeyInfo {
+  id          Int       @id @default(autoincrement())
+  householdId Int
+  household   Household @relation(fields: [householdId], references: [id])
+  label       String // e.g. "WiFi wachtwoord"
+  value       String
+
+  @@unique([householdId, label])
 }
