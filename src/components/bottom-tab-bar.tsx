@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShoppingBasket, Wallet, FolderOpen, House } from "lucide-react";
+import { ShoppingBasket, Wallet, House } from "lucide-react";
 
 const tabs = [
   { href: "/home", label: "Mandje", icon: ShoppingBasket },
   { href: "/geld", label: "Geld", icon: Wallet },
-  { href: "/docs", label: "Docs", icon: FolderOpen },
   { href: "/huis", label: "Huis", icon: House },
 ] as const;
 
@@ -23,7 +22,7 @@ export default function BottomTabBar() {
       aria-label="Hoofdnavigatie"
       className="w-full shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="mx-auto grid h-16 w-full max-w-2xl grid-cols-4">
+      <div className="mx-auto grid h-16 w-full max-w-2xl grid-cols-3">
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
