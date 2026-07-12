@@ -56,7 +56,7 @@ export default function GeldPageClient({
           <div className="space-y-6">
             <MonthNav month={month} />
             <BalanceCard data={data} />
-            <ItemSection title="Inkomsten" items={data.contributions} month={month} />
+            <ItemSection title="Inleg" items={data.contributions} month={month} />
             <ItemSection title="Uitgaven" items={data.expenses} month={month} />
             <AdjustmentsSection month={month} adjustments={data.adjustments} />
           </div>

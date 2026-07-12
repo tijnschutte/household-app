@@ -5,7 +5,7 @@ import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
   title: "Mandje",
-  description: "Household grocery list app",
+  description: "Boodschappen en geld voor je huishouden",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -26,7 +26,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${myFont.className} antialiased h-full w-full bg-background text-foreground`}
       >
-        <Toaster position="top-center" richColors />
+        {/* Bottom-center, offset clear of the add bar + tab bar: undo lives
+            in these toasts, so they must sit within one-handed thumb reach. */}
+        <Toaster
+          position="bottom-center"
+          richColors
+          offset={{ bottom: "9.5rem" }}
+          mobileOffset={{ bottom: "9.5rem" }}
+        />
         {children}
       </body>
     </html>

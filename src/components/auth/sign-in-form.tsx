@@ -79,7 +79,7 @@ export default function SignInForm() {
             placeholder="Voer je wachtwoord in"
             type={showPassword ? "text" : "password"}
             required
-            maxLength={15}
+            maxLength={72}
             autoComplete="current-password"
             disabled={isPending}
             className="h-12 pr-10"

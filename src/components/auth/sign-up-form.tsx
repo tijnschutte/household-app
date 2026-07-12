@@ -99,7 +99,7 @@ export default function SignUpForm() {
             placeholder="Maak een wachtwoord aan"
             type={showPassword ? "text" : "password"}
             required
-            maxLength={15}
+            maxLength={72}
             autoComplete="new-password"
             disabled={isPending}
             className="h-12 pr-10"

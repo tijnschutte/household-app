@@ -280,12 +280,10 @@ export const joinHousehold = async (formData: FormData) => {
   });
 };
 
-export const leaveHousehold = async (userId: number) => {
+export const leaveHousehold = async () => {
   return executeAction({
     actionFn: async () => {
-      if (!userId) {
-        throw new Error("Gebruikers-ID is vereist");
-      }
+      const { userId } = await requireUser();
 
       await db.user.update({
         where: { id: userId },
@@ -393,7 +391,9 @@ export async function updateGroceryCategory(groceryId: number, categoryId: numbe
 export async function updateGroceryName(groceryId: number, name: string) {
   try {
     const { userId, householdId } = await requireUser();
-    const trimmedName = name.trim();
+    // Lowercase like createGroceryItem: names are stored lowercase so the
+    // unique constraint dedups case-insensitively and the UI capitalizes.
+    const trimmedName = name.trim().toLowerCase();
     if (!trimmedName) {
       throw new Error("Naam mag niet leeg zijn");
     }

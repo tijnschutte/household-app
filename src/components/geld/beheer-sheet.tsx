@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, CalendarOff } from "lucide-react";
@@ -37,6 +37,7 @@ import {
   centsToInputValue,
   currentMonth,
   formatEuro,
+  formatMonthLabel,
   parseEuroToCents,
 } from "@/src/lib/geld/money";
 import {
@@ -72,13 +73,16 @@ function ItemFormDialog({
   const [isSaving, setIsSaving] = useState(false);
 
   // Re-seed local state whenever the dialog is (re)opened for a (possibly
-  // different) item — dialogs stay mounted, so state wouldn't otherwise reset.
-  const resetFor = (item: RecurringItemRow | null) => {
-    setName(item?.name ?? "");
-    setKind(item?.kind ?? RecurringKind.CONTRIBUTION);
-    setAmount(item ? centsToInputValue(item.expectedCents) : "");
-    setActiveFrom(item?.activeFrom ?? currentMonth());
-  };
+  // different) item — the dialog stays mounted, so state wouldn't otherwise
+  // reset. This must be an effect on the controlled `open` prop: it changes
+  // programmatically, which does not fire Radix's onOpenChange.
+  useEffect(() => {
+    if (!open) return;
+    setName(editing?.name ?? "");
+    setKind(editing?.kind ?? RecurringKind.CONTRIBUTION);
+    setAmount(editing ? centsToInputValue(editing.expectedCents) : "");
+    setActiveFrom(editing?.activeFrom ?? currentMonth());
+  }, [open, editing]);
 
   const handleConfirm = async () => {
     const trimmedName = name.trim();
@@ -115,7 +119,6 @@ function ItemFormDialog({
       open={open}
       onOpenChange={(next) => {
         if (isSaving) return;
-        if (next) resetFor(editing);
         onOpenChange(next);
       }}
     >
@@ -211,6 +214,11 @@ function EndItemDialog({
   const [lastMonth, setLastMonth] = useState(currentMonth());
   const [isSaving, setIsSaving] = useState(false);
 
+  // Same programmatic-open caveat as ItemFormDialog: re-seed via effect.
+  useEffect(() => {
+    if (open) setLastMonth(currentMonth());
+  }, [open]);
+
   const handleConfirm = async () => {
     if (!item) return;
     setIsSaving(true);
@@ -231,7 +239,6 @@ function EndItemDialog({
       open={open}
       onOpenChange={(next) => {
         if (isSaving) return;
-        if (next) setLastMonth(currentMonth());
         onOpenChange(next);
       }}
     >
@@ -299,16 +306,17 @@ function RecurringItemRowView({
       <div className="min-w-0">
         <p className="truncate text-sm font-medium first-letter:uppercase">{item.name}</p>
         <p className="text-xs text-muted-foreground">
-          {KIND_LABEL[item.kind]} · {formatEuro(item.expectedCents)} · {item.activeFrom}
+          {KIND_LABEL[item.kind]} · {formatEuro(item.expectedCents)} ·{" "}
+          {formatMonthLabel(item.activeFrom)}
           {" – "}
-          {item.activeTo ?? "heden"}
+          {item.activeTo ? formatMonthLabel(item.activeTo) : "heden"}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className="flex shrink-0 items-center gap-1.5">
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          className="h-10 w-10 text-muted-foreground hover:text-foreground"
           aria-label={`${item.name} bewerken`}
           onClick={onEdit}
         >
@@ -318,7 +326,7 @@ function RecurringItemRowView({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            className="h-10 w-10 text-muted-foreground hover:text-foreground"
             aria-label={`${item.name} beëindigen`}
             onClick={onEnd}
           >
@@ -328,7 +336,7 @@ function RecurringItemRowView({
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-destructive disabled:opacity-30"
+          className="h-10 w-10 text-muted-foreground hover:text-destructive disabled:opacity-30"
           aria-label={`${item.name} verwijderen`}
           disabled={item.hasEntries}
           onClick={() => setConfirmDeleteOpen(true)}
@@ -379,14 +387,14 @@ export default function BeheerSheet({
 
   const openAdd = () => setFormItem(null);
 
+  // The sheet opens programmatically (controlled `open`), so the empty-state
+  // CTA's auto-opened add dialog can't hang off onOpenChange.
+  useEffect(() => {
+    if (open && autoOpenAdd) setFormItem(null);
+  }, [open, autoOpenAdd]);
+
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (next && autoOpenAdd) openAdd();
-      }}
-    >
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="flex h-[85vh] flex-col gap-0 overflow-hidden">
         <SheetHeader>
           <SheetTitle>Vaste posten</SheetTitle>

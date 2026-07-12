@@ -7,8 +7,10 @@ import type { GeldMonth } from "@/src/lib/geld/data";
 export default function BalanceCard({ data }: { data: GeldMonth }) {
   return (
     <div className="rounded-xl border border-border bg-card px-5 py-4">
+      {/* "(nu)" because past months are viewable: this number is always the
+          current balance, not the balance at the end of the shown month. */}
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Op rekening
+        Op rekening (nu)
       </p>
       <p className="mt-1 text-3xl font-semibold tabular-nums">{formatEuro(data.balanceCents)}</p>
       <p className="mt-2 text-sm text-muted-foreground">

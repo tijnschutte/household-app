@@ -186,7 +186,7 @@ function AdjustmentRow({ adjustment }: { adjustment: GeldAdjustment }) {
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          className="-my-2 h-11 w-11 text-muted-foreground hover:text-destructive"
           aria-label="Correctie verwijderen"
           onClick={() => setConfirmOpen(true)}
         >
@@ -231,7 +231,7 @@ export default function AdjustmentsSection({
   return (
     <div>
       <h3 className="px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Rechttrekken
+        Correcties
       </h3>
       {adjustments.length > 0 && (
         <div className="divide-y divide-border px-1">

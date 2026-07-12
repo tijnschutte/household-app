@@ -95,7 +95,7 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
   const handleLeaveHousehold = async () => {
     setIsLeaving(true);
     try {
-      const result = await leaveHousehold(userId);
+      const result = await leaveHousehold();
       if (result.success) {
         toast.success(result.message);
         router.push("/household-setup");

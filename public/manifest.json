@@ -1,7 +1,7 @@
 {
   "name": "Mandje",
   "short_name": "Mandje",
-  "description": "Household grocery list app",
+  "description": "Boodschappen en geld voor je huishouden",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

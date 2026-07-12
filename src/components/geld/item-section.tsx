@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
@@ -43,6 +43,12 @@ function MarkPaidDialog({
   const router = useRouter();
   const [value, setValue] = useState(() => centsToInputValue(item.expectedCents));
   const [isSaving, setIsSaving] = useState(false);
+
+  // The dialog stays mounted and `open` changes programmatically (no Radix
+  // onOpenChange), so re-seed the amount on every open.
+  useEffect(() => {
+    if (open) setValue(centsToInputValue(item.expectedCents));
+  }, [open, item.expectedCents]);
 
   const handleConfirm = async () => {
     const cents = parseEuroToCents(value);
@@ -128,7 +134,7 @@ function ItemRow({ item, month }: { item: GeldItem; month: string }) {
         <button
           type="button"
           onClick={() => setUndoOpen(true)}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-sm hover:bg-accent"
+          className="-my-2 flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm hover:bg-accent"
         >
           <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />
           <span className="tabular-nums">{formatEuro(item.entry.amountCents)}</span>
@@ -138,7 +144,11 @@ function ItemRow({ item, month }: { item: GeldItem; month: string }) {
           <span className="text-sm tabular-nums text-muted-foreground">
             {formatEuro(item.expectedCents)}
           </span>
-          <Button size="sm" variant="outline" onClick={() => setMarkPaidOpen(true)}>
+          <Button
+            variant="outline"
+            className="-my-1.5 h-11 px-4"
+            onClick={() => setMarkPaidOpen(true)}
+          >
             Betaald
           </Button>
         </div>

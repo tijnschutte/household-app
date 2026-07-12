@@ -370,6 +370,14 @@ function UncategorizedItems({
       ref={setNodeRef}
       className={`space-y-1 py-3 transition-colors ${isDragActive && isOver ? "bg-primary/5" : ""}`}
     >
+      {/* Same header treatment as a category, so these items can't read as
+          belonging to the section above them. */}
+      <h3 className="px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Geen categorie
+        <span className="ml-1.5 font-normal normal-case text-gray-400">
+          {items.filter((item) => !item.bought).length}
+        </span>
+      </h3>
       {items.map((item) => (
         <DraggableGroceryItem
           key={item.id}

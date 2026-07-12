@@ -426,12 +426,15 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   };
 
   const handleRenameItem = async (groceryId: number, newName: string) => {
+    // Mirror the server's normalization so the local cache matches what the
+    // next poll will return.
+    const normalized = newName.trim().toLowerCase();
     try {
-      await updateGroceryName(groceryId, newName);
+      await updateGroceryName(groceryId, normalized);
       updateView(viewKey, (data) => ({
         ...data,
         items: data.items.map((item) =>
-          item.id === groceryId ? { ...item, name: newName } : item
+          item.id === groceryId ? { ...item, name: normalized } : item
         ),
       }));
       toast.success("Item hernoemd");
@@ -533,7 +536,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
                 aria-label="Categorie voor nieuwe items"
                 className={
                   targetCategory
-                    ? "h-8 max-w-[35%] shrink-0 gap-1 rounded-md border-0 bg-secondary px-2 text-xs font-medium text-muted-foreground shadow-none"
+                    ? "h-8 max-w-[50%] shrink-0 gap-1 rounded-md border-0 bg-secondary px-2 text-xs font-medium text-muted-foreground shadow-none"
                     : "h-8 w-11 shrink-0 justify-center gap-0.5 rounded-md border-0 bg-secondary px-0 text-muted-foreground shadow-none"
                 }
               >
