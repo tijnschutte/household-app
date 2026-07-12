@@ -99,6 +99,9 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   // The category new items land in ("quick add with category"). Sticky across
   // consecutive adds; reset to "Geen categorie" (null) when switching lists.
   const [targetCategoryId, setTargetCategoryId] = useState<number | null>(null);
+  // "+ Nieuwe categorie" inside the add-bar picker opens the same dialog as
+  // the ghost row at the list's end, but controlled from here.
+  const [pickerAddOpen, setPickerAddOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   // The <main> element is the actual scrolling container (overflow-y-auto);
   // scrolled to bottom only after the current user adds an item.
@@ -446,7 +449,9 @@ export default function HouseholdClientPage({ household, initialData }: Househol
 
   return (
     <div className="h-full w-full flex flex-col">
-      <PageHeader title={showPersonal ? "Persoonlijk" : household.name} left={<HuisButton />} />
+      {/* Fixed title matching the tab label; which list is visible is the
+          toggle's job, and the household name lives on the Huis page. */}
+      <PageHeader title="Mandje" left={<HuisButton />} />
 
       {/* List-view toggle directly under the header: it's navigation (which
           list you're looking at), kept away from the footer now that the
@@ -525,9 +530,13 @@ export default function HouseholdClientPage({ household, initialData }: Househol
                 consecutive adds; resets when switching lists. */}
             <Select
               value={targetCategory ? String(targetCategory.id) : "none"}
-              onValueChange={(value) =>
-                setTargetCategoryId(value === "none" ? null : Number(value))
-              }
+              onValueChange={(value) => {
+                if (value === "new") {
+                  setPickerAddOpen(true);
+                  return;
+                }
+                setTargetCategoryId(value === "none" ? null : Number(value));
+              }}
             >
               {/* Compact chip: icon + chevron only while no category is
                   targeted; a short truncated name (max 35% of the bar) once
@@ -567,8 +576,30 @@ export default function HouseholdClientPage({ household, initialData }: Househol
                     {category.name}
                   </SelectItem>
                 ))}
+                <SelectItem value="new" className="rounded-lg py-2.5 text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Plus className="h-3.5 w-3.5" />
+                    Nieuwe categorie
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
+            <AddCategory
+              showPersonal={showPersonal}
+              open={pickerAddOpen}
+              onOpenChange={setPickerAddOpen}
+              onCategoryAdded={(category) => {
+                // Target the fresh category right away (optimistically, so the
+                // chip doesn't wait on the refetch) — the user was mid-add.
+                updateView(viewKey, (data) => ({
+                  ...data,
+                  categories: [...data.categories, category],
+                }));
+                setTargetCategoryId(category.id);
+                fetchData(viewKey, { silent: true });
+                inputRef.current?.focus();
+              }}
+            />
             <Input
               ref={inputRef}
               className="flex-1 min-w-0 h-full border-0 shadow-none bg-transparent px-2 text-base focus-visible:ring-0 focus-visible:ring-offset-0"

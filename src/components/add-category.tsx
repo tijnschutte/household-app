@@ -14,20 +14,40 @@ import {
   DialogTrigger,
 } from "@/src/components/ui/dialog";
 import { Plus } from "lucide-react";
+import { Category } from "@prisma/client";
 import { createCategory } from "@/src/lib/actions";
 import { toast } from "sonner";
 
 type AddCategoryProps = {
   showPersonal: boolean;
-  onCategoryAdded: () => void;
+  onCategoryAdded: (category: Category) => void;
   /** Custom dialog trigger, rendered via asChild. Defaults to the outline button. */
   trigger?: React.ReactNode;
+  /** Controlled mode (no trigger rendered): open the dialog from elsewhere,
+      e.g. the add-bar's category picker. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export default function AddCategory({ showPersonal, onCategoryAdded, trigger }: AddCategoryProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function AddCategory({
+  showPersonal,
+  onCategoryAdded,
+  trigger,
+  open,
+  onOpenChange,
+}: AddCategoryProps) {
+  const isControlled = open !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = (next: boolean) => {
+    // The dialog stays mounted, so drop a cancelled attempt's text on close.
+    if (!next) setCategoryName("");
+    if (isControlled) onOpenChange?.(next);
+    else setInternalOpen(next);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,11 +59,11 @@ export default function AddCategory({ showPersonal, onCategoryAdded, trigger }: 
 
     setIsCreating(true);
     try {
-      await createCategory(categoryName, showPersonal);
+      const category = await createCategory(categoryName, showPersonal);
       toast.success(`Categorie "${categoryName}" aangemaakt`);
       setCategoryName("");
       setIsOpen(false);
-      onCategoryAdded();
+      onCategoryAdded(category);
     } catch (error) {
       console.error("Failed to create category:", error);
       const errorMessage = error instanceof Error ? error.message : "Aanmaken categorie mislukt";
@@ -55,14 +75,16 @@ export default function AddCategory({ showPersonal, onCategoryAdded, trigger }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="outline" size="sm" className="gap-2">
-            <Plus className="h-4 w-4" />
-            Categorie toevoegen
-          </Button>
-        )}
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button variant="outline" size="sm" className="gap-2">
+              <Plus className="h-4 w-4" />
+              Categorie toevoegen
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Categorie aanmaken</DialogTitle>

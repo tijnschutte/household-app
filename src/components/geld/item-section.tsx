@@ -126,33 +126,34 @@ function ItemRow({ item, month }: { item: GeldItem; month: string }) {
   };
 
   return (
-    <div className="flex items-center justify-between py-2.5">
-      <span className="min-w-0 truncate text-sm font-medium first-letter:uppercase">
-        {item.name}
-      </span>
-      {item.entry ? (
-        <button
-          type="button"
-          onClick={() => setUndoOpen(true)}
-          className="-my-2 flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm hover:bg-accent"
+    <div>
+      {/* One "done" gesture across the app: the same circle checkbox as the
+          grocery list. Tapping anywhere on the row marks paid (via the amount
+          dialog) or, when already paid, opens the undo dialog. */}
+      <button
+        type="button"
+        onClick={() => (item.entry ? setUndoOpen(true) : setMarkPaidOpen(true))}
+        aria-label={
+          item.entry ? `${item.name}: betaling ongedaan maken` : `${item.name}: markeer als betaald`
+        }
+        className="flex min-h-12 w-full items-center gap-3 py-1.5 text-left"
+      >
+        <span
+          className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${
+            item.entry ? "border-primary bg-primary" : "border-gray-300"
+          }`}
         >
-          <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />
-          <span className="tabular-nums">{formatEuro(item.entry.amountCents)}</span>
-        </button>
-      ) : (
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-sm tabular-nums text-muted-foreground">
-            {formatEuro(item.expectedCents)}
-          </span>
-          <Button
-            variant="outline"
-            className="-my-1.5 h-11 px-4"
-            onClick={() => setMarkPaidOpen(true)}
-          >
-            Betaald
-          </Button>
-        </div>
-      )}
+          {item.entry && <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={3} />}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium first-letter:uppercase">
+          {item.name}
+        </span>
+        <span
+          className={`shrink-0 text-sm tabular-nums ${item.entry ? "" : "text-muted-foreground"}`}
+        >
+          {formatEuro(item.entry ? item.entry.amountCents : item.expectedCents)}
+        </span>
+      </button>
 
       <MarkPaidDialog
         item={item}

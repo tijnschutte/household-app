@@ -424,6 +424,11 @@ function DroppableCategory({
   // expanded, not collapsed to the empty drop-line (WP-10).
   const isEmpty = items.length === 0;
 
+  // Empty categories are hidden at rest to keep the list tidy. They come
+  // back (header, delete button, drop line) while a drag is active, and
+  // stay selectable in the add-bar picker.
+  if (isEmpty && !isDragActive) return null;
+
   return (
     // No border-radius here: this element carries the divide-y hairline, and
     // a radius would make the divider curve up at its ends (ghost-row look).
