@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShoppingBasket, Wallet, House } from "lucide-react";
+import { ShoppingBasket, Wallet } from "lucide-react";
 
 const tabs = [
   { href: "/home", label: "Mandje", icon: ShoppingBasket },
   { href: "/geld", label: "Geld", icon: Wallet },
-  { href: "/huis", label: "Huis", icon: House },
 ] as const;
 
 // Platform-wide bottom navigation. Every module (tab) owns the area above it;
@@ -22,7 +21,7 @@ export default function BottomTabBar() {
       aria-label="Hoofdnavigatie"
       className="w-full shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="mx-auto grid h-16 w-full max-w-2xl grid-cols-3">
+      <div className="mx-auto grid h-16 w-full max-w-2xl grid-cols-2">
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (

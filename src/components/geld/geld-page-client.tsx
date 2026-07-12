@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Settings } from "lucide-react";
 import PageHeader from "@/src/components/page-header";
+import HuisButton from "@/src/components/huis-button";
 import { Button } from "@/src/components/ui/button";
 import MonthNav from "@/src/components/geld/month-nav";
 import BalanceCard from "@/src/components/geld/balance-card";
@@ -35,6 +36,7 @@ export default function GeldPageClient({
     <div className="flex h-full w-full flex-col">
       <PageHeader
         title="Geld"
+        left={<HuisButton />}
         right={
           <Button
             variant="ghost"

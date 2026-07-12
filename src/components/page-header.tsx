@@ -1,6 +1,5 @@
-// Flat brand-blue header shared by the simple module tabs (Geld, Docs, Huis).
-// Mirrors the grocery header: equal-width side slots keep the title visually
-// centered even when only one side has a button.
+// Flat brand-blue header shared by every module. Equal-width side slots keep
+// the title visually centered even when only one side has a button.
 export default function PageHeader({
   title,
   left,

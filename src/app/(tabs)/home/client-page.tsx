@@ -18,6 +18,8 @@ import {
 } from "@/src/lib/actions";
 import GroceryList from "@/src/components/house/grocery-list";
 import AddCategory from "@/src/components/add-category";
+import PageHeader from "@/src/components/page-header";
+import HuisButton from "@/src/components/huis-button";
 import { toast } from "sonner";
 
 type GroceryWithCategory = Grocery & { category: Category | null };
@@ -441,14 +443,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
 
   return (
     <div className="h-full w-full flex flex-col">
-      {/* Header - Fixed at top, flat brand blue, no gradient/drop-shadow.
-          Sign-out and household info moved to the Huis tab, so the header is
-          just the title. */}
-      <header className="flex h-14 w-full shrink-0 items-center bg-primary px-2">
-        <h2 className="min-w-0 flex-1 truncate text-center text-lg font-semibold tracking-wide text-primary-foreground">
-          {showPersonal ? "Persoonlijk" : household.name}
-        </h2>
-      </header>
+      <PageHeader title={showPersonal ? "Persoonlijk" : household.name} left={<HuisButton />} />
 
       {/* List-view toggle directly under the header: it's navigation (which
           list you're looking at), kept away from the footer now that the
