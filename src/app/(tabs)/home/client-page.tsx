@@ -99,8 +99,8 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   // The category new items land in ("quick add with category"). Sticky across
   // consecutive adds; reset to "Geen categorie" (null) when switching lists.
   const [targetCategoryId, setTargetCategoryId] = useState<number | null>(null);
-  // "+ Nieuwe categorie" inside the add-bar picker opens the same dialog as
-  // the ghost row at the list's end, but controlled from here.
+  // The add-bar picker's "+ Nieuwe categorie" option is the one place to
+  // create categories; it opens this controlled dialog.
   const [pickerAddOpen, setPickerAddOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   // The <main> element is the actual scrolling container (overflow-y-auto);
@@ -477,22 +477,6 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           onDeleteItem={handleDeleteItem}
           showCategories={true}
           busyRef={busyRef}
-        />
-        {/* Quiet "add category" affordance at the very end of the list (the
-            user's thumb lives at the bottom of the screen). Same dialog as
-            before, just a full-width muted ghost row as its trigger. */}
-        <AddCategory
-          showPersonal={showPersonal}
-          onCategoryAdded={() => fetchData(viewKey)}
-          trigger={
-            <Button
-              variant="ghost"
-              className="mt-4 h-11 w-full justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-normal text-muted-foreground hover:text-foreground"
-            >
-              <Plus className="h-4 w-4" />
-              Categorie toevoegen
-            </Button>
-          }
         />
       </main>
 

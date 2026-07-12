@@ -230,24 +230,29 @@ export default function AdjustmentsSection({
 
   return (
     <div>
-      <h3 className="px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Correcties
-      </h3>
-      {adjustments.length > 0 && (
+      <div className="flex items-center justify-between px-1 pb-1.5">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Correcties
+        </h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="-my-3 -mr-2 h-10 w-10 text-muted-foreground hover:text-foreground"
+          aria-label="Correctie toevoegen"
+          onClick={() => setAddOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      {adjustments.length === 0 ? (
+        <p className="px-1 py-2 text-sm text-muted-foreground">Geen correcties</p>
+      ) : (
         <div className="divide-y divide-border px-1">
           {adjustments.map((adjustment) => (
             <AdjustmentRow key={adjustment.id} adjustment={adjustment} />
           ))}
         </div>
       )}
-      <Button
-        variant="ghost"
-        onClick={() => setAddOpen(true)}
-        className="mt-2 h-11 w-full justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-normal text-muted-foreground hover:text-foreground"
-      >
-        <Plus className="h-4 w-4" />
-        Correctie toevoegen
-      </Button>
       <AddAdjustmentDialog month={month} open={addOpen} onOpenChange={setAddOpen} />
     </div>
   );

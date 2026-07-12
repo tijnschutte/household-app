@@ -57,17 +57,19 @@ const KIND_LABEL: Record<RecurringKind, string> = {
 // dialog, distinguished by whether `editing` is set.
 function ItemFormDialog({
   editing,
+  defaultKind,
   open,
   onOpenChange,
 }: {
   editing: RecurringItemRow | null;
+  defaultKind: RecurringKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
   const isEdit = editing !== null;
   const [name, setName] = useState(editing?.name ?? "");
-  const [kind, setKind] = useState<RecurringKind>(editing?.kind ?? RecurringKind.CONTRIBUTION);
+  const [kind, setKind] = useState<RecurringKind>(editing?.kind ?? defaultKind);
   const [amount, setAmount] = useState(editing ? centsToInputValue(editing.expectedCents) : "");
   const [activeFrom, setActiveFrom] = useState(editing?.activeFrom ?? currentMonth());
   const [isSaving, setIsSaving] = useState(false);
@@ -79,10 +81,10 @@ function ItemFormDialog({
   useEffect(() => {
     if (!open) return;
     setName(editing?.name ?? "");
-    setKind(editing?.kind ?? RecurringKind.CONTRIBUTION);
+    setKind(editing?.kind ?? defaultKind);
     setAmount(editing ? centsToInputValue(editing.expectedCents) : "");
     setActiveFrom(editing?.activeFrom ?? currentMonth());
-  }, [open, editing]);
+  }, [open, editing, defaultKind]);
 
   const handleConfirm = async () => {
     const trimmedName = name.trim();
@@ -374,24 +376,25 @@ export default function BeheerSheet({
   open,
   onOpenChange,
   items,
-  autoOpenAdd = false,
+  autoAddKind = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: RecurringItemRow[];
-  /** Opens the "add" dialog immediately once the sheet is open (empty state CTA). */
-  autoOpenAdd?: boolean;
+  /** When set, opens the "add" dialog with this kind preselected as soon as
+      the sheet opens (section-header "+" and empty-state CTA). */
+  autoAddKind?: RecurringKind | null;
 }) {
   const [formItem, setFormItem] = useState<RecurringItemRow | null | undefined>(undefined);
   const [endItem, setEndItem] = useState<RecurringItemRow | null>(null);
 
   const openAdd = () => setFormItem(null);
 
-  // The sheet opens programmatically (controlled `open`), so the empty-state
-  // CTA's auto-opened add dialog can't hang off onOpenChange.
+  // The sheet opens programmatically (controlled `open`), so the auto-opened
+  // add dialog can't hang off onOpenChange.
   useEffect(() => {
-    if (open && autoOpenAdd) setFormItem(null);
-  }, [open, autoOpenAdd]);
+    if (open && autoAddKind) setFormItem(null);
+  }, [open, autoAddKind]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -428,6 +431,7 @@ export default function BeheerSheet({
 
       <ItemFormDialog
         editing={formItem ?? null}
+        defaultKind={autoAddKind ?? RecurringKind.CONTRIBUTION}
         open={formItem !== undefined}
         onOpenChange={(next) => !next && setFormItem(undefined)}
       />

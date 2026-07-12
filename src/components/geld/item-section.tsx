@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
@@ -191,16 +191,31 @@ export default function ItemSection({
   title,
   items,
   month,
+  onAdd,
+  addLabel,
 }: {
   title: string;
   items: GeldItem[];
   month: string;
+  onAdd: () => void;
+  addLabel: string;
 }) {
   return (
     <div>
-      <h3 className="px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
+      <div className="flex items-center justify-between px-1 pb-1.5">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="-my-3 -mr-2 h-10 w-10 text-muted-foreground hover:text-foreground"
+          aria-label={addLabel}
+          onClick={onAdd}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
       {items.length === 0 ? (
         <p className="px-1 py-2 text-sm text-muted-foreground">Geen items</p>
       ) : (

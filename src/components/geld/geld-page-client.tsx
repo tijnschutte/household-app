@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Settings } from "lucide-react";
+import { RecurringKind } from "@prisma/client";
 import PageHeader from "@/src/components/page-header";
 import HuisButton from "@/src/components/huis-button";
 import { Button } from "@/src/components/ui/button";
@@ -23,10 +24,12 @@ export default function GeldPageClient({
   recurringItems: RecurringItemRow[];
 }) {
   const [beheerOpen, setBeheerOpen] = useState(false);
-  const [beheerAutoAdd, setBeheerAutoAdd] = useState(false);
+  // Which kind the auto-opened add form starts on; null = just the sheet
+  // (gear button), for editing/ending existing posts.
+  const [beheerAddKind, setBeheerAddKind] = useState<RecurringKind | null>(null);
 
-  const openBeheer = (autoAdd: boolean) => {
-    setBeheerAutoAdd(autoAdd);
+  const openBeheer = (addKind: RecurringKind | null) => {
+    setBeheerAddKind(addKind);
     setBeheerOpen(true);
   };
 
@@ -43,7 +46,7 @@ export default function GeldPageClient({
             size="icon"
             aria-label="Vaste posten beheren"
             className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
-            onClick={() => openBeheer(false)}
+            onClick={() => openBeheer(null)}
           >
             <Settings className="h-5 w-5" />
           </Button>
@@ -51,13 +54,25 @@ export default function GeldPageClient({
       />
       <main className="flex w-full max-w-2xl mx-auto flex-1 flex-col overflow-y-auto px-4 pt-4 pb-8">
         {!hasItems ? (
-          <EmptyState onAdd={() => openBeheer(true)} />
+          <EmptyState onAdd={() => openBeheer(RecurringKind.CONTRIBUTION)} />
         ) : (
           <div className="space-y-6">
             <MonthNav month={month} />
             <BalanceCard data={data} />
-            <ItemSection title="Inleg" items={data.contributions} month={month} />
-            <ItemSection title="Uitgaven" items={data.expenses} month={month} />
+            <ItemSection
+              title="Inleg"
+              items={data.contributions}
+              month={month}
+              onAdd={() => openBeheer(RecurringKind.CONTRIBUTION)}
+              addLabel="Inleg toevoegen"
+            />
+            <ItemSection
+              title="Uitgaven"
+              items={data.expenses}
+              month={month}
+              onAdd={() => openBeheer(RecurringKind.EXPENSE)}
+              addLabel="Uitgave toevoegen"
+            />
             <AdjustmentsSection month={month} adjustments={data.adjustments} />
           </div>
         )}
@@ -67,7 +82,7 @@ export default function GeldPageClient({
         open={beheerOpen}
         onOpenChange={setBeheerOpen}
         items={recurringItems}
-        autoOpenAdd={beheerAutoAdd}
+        autoAddKind={beheerAddKind}
       />
     </div>
   );
