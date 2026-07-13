@@ -1,18 +1,13 @@
 import { auth } from "@/src/lib/auth";
 import { redirect } from "next/navigation";
-import { findHomeByUserId } from "@/src/lib/actions";
 
 const Page = async () => {
   const session = await auth();
   if (!session) redirect("/sign-in");
 
-  const home = await findHomeByUserId(Number(session.user?.id));
-
-  if (home) {
-    redirect("/home");
-  } else {
-    redirect("/household-setup");
-  }
+  // /home itself redirects to /household-setup when the user has no
+  // household, so no DB lookup is needed on this hot startup path.
+  redirect("/home");
 };
 
 export default Page;

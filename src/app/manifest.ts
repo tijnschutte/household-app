@@ -5,7 +5,9 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Mandje",
     short_name: "Mandje",
     description: "Boodschappen en geld voor je huishouden",
-    start_url: "/",
+    // Straight to the main tab: "/" is only an auth-check + redirect hop, and
+    // /home has a loading skeleton so the PWA paints immediately on cold start.
+    start_url: "/home",
     display: "standalone",
     background_color: "#1e3a8a",
     theme_color: "#1e3a8a",

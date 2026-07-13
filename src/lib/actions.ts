@@ -34,24 +34,6 @@ export const signUp = async (formData: FormData) => {
   });
 };
 
-export const findHomeByUserId = async (userId: number | undefined) => {
-  try {
-    const household = await prisma.household.findFirst({
-      where: {
-        members: {
-          some: {
-            id: userId,
-          },
-        },
-      },
-    });
-    return household;
-  } catch (error) {
-    console.error("Failed to fetch household:", error);
-    return null;
-  }
-};
-
 export async function createGroceryItem(
   name: string,
   personal: boolean,
