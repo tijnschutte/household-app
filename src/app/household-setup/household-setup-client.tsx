@@ -6,10 +6,20 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/card";
-import { createHousehold, joinHousehold } from "@/src/lib/actions";
+import type { ActionResult } from "@/src/lib/action-result";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { signOut } from "next-auth/react";
+
+/**
+ * The two operations this screen needs, owned here rather than imported from
+ * the action module: the server page passes the real server actions in, and a
+ * test passes a fake. Keeps Prisma out of anything that renders this.
+ */
+export type HouseholdSetupActions = {
+  onCreateHousehold: (formData: FormData) => Promise<ActionResult>;
+  onJoinHousehold: (formData: FormData) => Promise<ActionResult>;
+};
 
 type SetupTab = "create" | "join";
 
@@ -54,7 +64,10 @@ function SetupTabs({ tab, onChange }: { tab: SetupTab; onChange: (tab: SetupTab)
   );
 }
 
-export default function HouseholdSetupClient() {
+export default function HouseholdSetupClient({
+  onCreateHousehold,
+  onJoinHousehold,
+}: HouseholdSetupActions) {
   const router = useRouter();
   const [tab, setTab] = useState<SetupTab>("create");
   const [isCreating, setIsCreating] = useState(false);
@@ -67,7 +80,7 @@ export default function HouseholdSetupClient() {
 
     try {
       const formData = new FormData(e.currentTarget);
-      const result = await createHousehold(formData);
+      const result = await onCreateHousehold(formData);
 
       if (result.success) {
         toast.success(result.message);
@@ -96,7 +109,7 @@ export default function HouseholdSetupClient() {
       const rawSecret = (formData.get("secret") as string) ?? "";
       formData.set("secret", rawSecret.trim().toUpperCase());
 
-      const result = await joinHousehold(formData);
+      const result = await onJoinHousehold(formData);
 
       if (result.success) {
         toast.success(result.message);

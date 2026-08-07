@@ -9,6 +9,7 @@ import {
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/src/lib/auth";
+import { signUp } from "@/src/lib/actions";
 import SignUpForm from "@/src/components/auth/sign-up-form";
 import BrandMark from "@/src/components/brand-mark";
 
@@ -25,7 +26,7 @@ const Page = async () => {
           <CardDescription>Voer je gegevens in om een account aan te maken</CardDescription>
         </CardHeader>
         <CardContent>
-          <SignUpForm />
+          <SignUpForm onSignUp={signUp} />
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">
           <div className="text-sm text-muted-foreground text-center">

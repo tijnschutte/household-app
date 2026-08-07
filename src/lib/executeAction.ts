@@ -1,4 +1,5 @@
 import { isRedirectError } from "next/dist/client/components/redirect-error";
+import type { ActionResult } from "@/src/lib/action-result";
 
 type Options<T> = {
   actionFn: () => Promise<T>;
@@ -8,7 +9,7 @@ type Options<T> = {
 const executeAction = async <T>({
   actionFn,
   successMessage = "The actions was successful",
-}: Options<T>): Promise<{ success: boolean; message: string }> => {
+}: Options<T>): Promise<ActionResult> => {
   try {
     await actionFn();
 

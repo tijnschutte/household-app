@@ -29,14 +29,23 @@ import { Separator } from "@/src/components/ui/separator";
 import { Badge } from "@/src/components/ui/badge";
 import { Copy, Check, LogOut, Share2 } from "lucide-react";
 import { toast } from "sonner";
-import { leaveHousehold } from "@/src/lib/actions";
+import type { ActionResult } from "@/src/lib/action-result";
+
+/**
+ * The one operation this card needs, owned here rather than imported from the
+ * action module: the server page passes the real server action in, and a test
+ * passes a fake. Keeps Prisma out of anything that renders this.
+ */
+export type HouseholdInfoActions = {
+  onLeaveHousehold: () => Promise<ActionResult>;
+};
 
 type HouseholdInfoProps = {
   household: HouseholdWithMembers;
   userId: number;
-};
+} & HouseholdInfoActions;
 
-export default function HouseholdInfo({ household, userId }: HouseholdInfoProps) {
+export default function HouseholdInfo({ household, userId, onLeaveHousehold }: HouseholdInfoProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -95,7 +104,7 @@ export default function HouseholdInfo({ household, userId }: HouseholdInfoProps)
   const handleLeaveHousehold = async () => {
     setIsLeaving(true);
     try {
-      const result = await leaveHousehold();
+      const result = await onLeaveHousehold();
       if (result.success) {
         toast.success(result.message);
         router.push("/household-setup");

@@ -40,6 +40,23 @@ vi.mock("next/navigation", () => ({
   notFound: vi.fn(),
 }));
 
+/**
+ * next-auth's browser helpers talk to /api/auth over the network, which does not
+ * exist in a test process. They are client-only functions, so a server page cannot
+ * hand them down the way it hands down a server action — this is the framework
+ * standing in for itself, like the router above.
+ *
+ * `signIn` resolves undefined by default, which the forms read as success. A test
+ * that wants a rejected login overrides it with mockResolvedValue({ error }).
+ */
+const auth = {
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+};
+
+vi.mock("next-auth/react", () => auth);
+
 afterEach(() => {
   Object.values(router).forEach((fn) => fn.mockClear());
+  Object.values(auth).forEach((fn) => fn.mockReset());
 });

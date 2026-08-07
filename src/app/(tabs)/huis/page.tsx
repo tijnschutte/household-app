@@ -1,6 +1,7 @@
 import { auth } from "@/src/lib/auth";
 import { redirect } from "next/navigation";
 import { getHouseholdById } from "@/src/lib/data";
+import { leaveHousehold } from "@/src/lib/actions";
 import HouseholdInfo from "@/src/components/household-info";
 import PageHeader from "@/src/components/page-header";
 import SignOutButton from "@/src/components/auth/sign-out-button";
@@ -23,7 +24,11 @@ export default async function HuisPage() {
     <div className="flex h-full w-full flex-col">
       <PageHeader title="Huis" left={<BackButton />} right={<SignOutButton />} />
       <main className="w-full max-w-2xl mx-auto flex-1 overflow-y-auto px-4 py-4">
-        <HouseholdInfo household={household} userId={Number(session.user.id)} />
+        <HouseholdInfo
+          household={household}
+          userId={Number(session.user.id)}
+          onLeaveHousehold={leaveHousehold}
+        />
       </main>
     </div>
   );

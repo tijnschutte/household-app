@@ -8,6 +8,7 @@ import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { signInSchema } from "@/src/lib/schema";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -22,14 +23,10 @@ export default function SignInForm() {
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
-    // Client-side validation
-    if (username.includes(" ")) {
-      toast.error("Gebruikersnaam mag geen spaties bevatten");
-      setIsPending(false);
-      return;
-    }
-    if (password.includes(" ")) {
-      toast.error("Wachtwoord mag geen spaties bevatten");
+    // Same schema the credentials provider parses, so the two can't drift apart.
+    const credentials = signInSchema.safeParse({ username, password });
+    if (!credentials.success) {
+      toast.error(credentials.error.errors[0].message);
       setIsPending(false);
       return;
     }

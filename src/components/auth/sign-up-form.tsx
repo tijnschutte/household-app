@@ -8,9 +8,19 @@ import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { signUp } from "@/src/lib/actions";
+import { signUpSchema } from "@/src/lib/schema";
+import type { ActionResult } from "@/src/lib/action-result";
 
-export default function SignUpForm() {
+/**
+ * The one operation this form needs, owned here rather than imported from the
+ * action module: the server page passes the real server action in, and a test
+ * passes a fake. Keeps Prisma out of anything that renders this.
+ */
+export type SignUpFormActions = {
+  onSignUp: (formData: FormData) => Promise<ActionResult>;
+};
+
+export default function SignUpForm({ onSignUp }: SignUpFormActions) {
   const [showPassword, setShowPassword] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const router = useRouter();
@@ -23,30 +33,16 @@ export default function SignUpForm() {
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
-    // Client-side validation
-    if (username.includes(" ")) {
-      toast.error("Gebruikersnaam mag geen spaties bevatten");
-      setIsPending(false);
-      return;
-    }
-    if (password.includes(" ")) {
-      toast.error("Wachtwoord mag geen spaties bevatten");
-      setIsPending(false);
-      return;
-    }
-    if (username.length < 3) {
-      toast.error("Gebruikersnaam moet minimaal 3 karakters zijn");
-      setIsPending(false);
-      return;
-    }
-    if (password.length < 3) {
-      toast.error("Wachtwoord moet minimaal 3 karakters zijn");
+    // Same schema the server action parses, so the two can't drift apart.
+    const credentials = signUpSchema.safeParse({ username, password });
+    if (!credentials.success) {
+      toast.error(credentials.error.errors[0].message);
       setIsPending(false);
       return;
     }
 
     try {
-      const result = await signUp(formData);
+      const result = await onSignUp(formData);
 
       if (result.success) {
         // Auto-login after successful sign-up

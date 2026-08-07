@@ -1,6 +1,7 @@
 import { auth } from "@/src/lib/auth";
 import { redirect } from "next/navigation";
 import { getHouseholdById } from "@/src/lib/data";
+import { createHousehold, joinHousehold } from "@/src/lib/actions";
 import HouseholdSetupClient from "./household-setup-client";
 
 export default async function HouseholdSetupPage() {
@@ -16,5 +17,7 @@ export default async function HouseholdSetupPage() {
     redirect("/home");
   }
 
-  return <HouseholdSetupClient />;
+  return (
+    <HouseholdSetupClient onCreateHousehold={createHousehold} onJoinHousehold={joinHousehold} />
+  );
 }
