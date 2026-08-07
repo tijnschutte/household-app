@@ -2,8 +2,32 @@
 
 import { getHouseholdById, getHomeData } from "@/src/lib/data";
 import { redirect } from "next/navigation";
-import HouseholdClientPage from "./client-page";
+import HouseholdClientPage, { type HomeActions } from "./client-page";
 import { auth } from "@/src/lib/auth";
+import {
+  createCategory,
+  createGroceryItem,
+  deleteCategory,
+  deleteItems,
+  restoreItems,
+  setGroceryBought,
+  updateGroceryCategory,
+  updateGroceryName,
+} from "@/src/lib/actions";
+
+// The composition root for the home page: the only place that knows which
+// server action backs each operation the UI offers.
+const homeActions: HomeActions = {
+  onLoadData: getHomeData,
+  onCreateItem: createGroceryItem,
+  onSetBought: setGroceryBought,
+  onDeleteItems: deleteItems,
+  onRestoreItems: restoreItems,
+  onUpdateItemCategory: updateGroceryCategory,
+  onRenameItem: updateGroceryName,
+  onDeleteCategory: deleteCategory,
+  onCreateCategory: createCategory,
+};
 
 export default async function Page() {
   const session = await auth();
@@ -16,5 +40,7 @@ export default async function Page() {
   }
   const initialData = await getHomeData(false);
 
-  return <HouseholdClientPage household={household} initialData={initialData} />;
+  return (
+    <HouseholdClientPage household={household} initialData={initialData} actions={homeActions} />
+  );
 }

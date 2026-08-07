@@ -1,0 +1,254 @@
+import { describe, it, expect } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import HouseholdClientPage, { type HomeActions } from "./client-page";
+import { aCategory, aGrocery, aViewData } from "@/tests/fixtures/house";
+import type { ViewData } from "@/src/lib/house/grocery-view";
+import type { Household } from "@prisma/client";
+
+const household: Household = { id: 1, name: "Familie Jansen", secret: "A1B2C3" };
+
+/**
+ * A stand-in for the whole home-page action set. Each entry records what it was
+ * asked to do; `personalData` is what the personal list loads as, so a test can
+ * check the two views are cached apart.
+ */
+function fakeActions({
+  personalData = aViewData(),
+  failCreate = false,
+}: { personalData?: ViewData; failCreate?: boolean } = {}) {
+  const created: Array<[string, boolean, number | null | undefined]> = [];
+  const bought: Array<[number, boolean]> = [];
+  const deleted: number[][] = [];
+  const restored: unknown[] = [];
+  const renamed: Array<[number, string]> = [];
+  const categoriesDeleted: number[] = [];
+  const loaded: boolean[] = [];
+
+  const actions: HomeActions = {
+    onLoadData: async (personal) => {
+      loaded.push(personal);
+      return personal ? personalData : aViewData();
+    },
+    onCreateItem: async (name, personal, categoryId) => {
+      if (failCreate) throw new Error("Toevoegen mislukt");
+      created.push([name, personal, categoryId]);
+      return aGrocery({ id: 500 + created.length, name, categoryId: categoryId ?? null });
+    },
+    onSetBought: async (id, next) => {
+      bought.push([id, next]);
+    },
+    onDeleteItems: async (ids) => {
+      deleted.push(ids);
+    },
+    onRestoreItems: async (items) => {
+      restored.push(items);
+    },
+    onUpdateItemCategory: async () => {},
+    onRenameItem: async (id, name) => {
+      renamed.push([id, name]);
+    },
+    onDeleteCategory: async (id) => {
+      categoriesDeleted.push(id);
+    },
+    onCreateCategory: async (name) => aCategory({ id: 99, name }),
+  };
+
+  return { actions, created, bought, deleted, restored, renamed, categoriesDeleted, loaded };
+}
+
+function renderHome({
+  initialData = aViewData({ items: [aGrocery({ id: 1, name: "melk" })] }),
+  ...options
+}: { initialData?: ViewData } & Parameters<typeof fakeActions>[0] = {}) {
+  const fake = fakeActions(options);
+  render(
+    <HouseholdClientPage household={household} initialData={initialData} actions={fake.actions} />
+  );
+  return fake;
+}
+
+const addBar = () => screen.getByPlaceholderText("Voeg een item toe...");
+
+describe("HouseholdClientPage", () => {
+  it("shows the household list it was given, without asking the server again", () => {
+    const fake = renderHome({
+      initialData: aViewData({ items: [aGrocery({ id: 1, name: "melk" })] }),
+    });
+
+    expect(screen.getByText("melk")).toBeInTheDocument();
+    expect(fake.loaded).toEqual([]);
+  });
+
+  describe("adding an item", () => {
+    it("adds what was typed to the list the user is looking at", async () => {
+      const fake = renderHome();
+
+      await userEvent.type(addBar(), "brood");
+      await userEvent.click(screen.getByRole("button", { name: "Item toevoegen" }));
+
+      expect(fake.created).toEqual([["brood", false, null]]);
+    });
+
+    it("shows the item straight away, before the server has answered", async () => {
+      renderHome();
+
+      await userEvent.type(addBar(), "brood");
+      await userEvent.click(screen.getByRole("button", { name: "Item toevoegen" }));
+
+      expect(screen.getByText("brood")).toBeInTheDocument();
+    });
+
+    it("clears the input so the next item can be typed right away", async () => {
+      renderHome();
+
+      await userEvent.type(addBar(), "brood");
+      await userEvent.click(screen.getByRole("button", { name: "Item toevoegen" }));
+
+      expect(addBar()).toHaveValue("");
+    });
+
+    it("adds on Enter too", async () => {
+      const fake = renderHome();
+
+      await userEvent.type(addBar(), "brood{Enter}");
+
+      expect(fake.created).toEqual([["brood", false, null]]);
+    });
+
+    it("refuses a blank name without touching the server", async () => {
+      const fake = renderHome();
+
+      await userEvent.type(addBar(), "   {Enter}");
+
+      expect(fake.created).toEqual([]);
+    });
+
+    it("takes the item back off the list when the server refuses it", async () => {
+      renderHome({ failCreate: true });
+
+      await userEvent.type(addBar(), "brood{Enter}");
+
+      expect(screen.queryByText("brood")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("checking items off", () => {
+    it("tells the server what was checked", async () => {
+      const fake = renderHome({
+        initialData: aViewData({ items: [aGrocery({ id: 1, name: "melk", bought: false })] }),
+      });
+
+      await userEvent.click(screen.getByText("melk"));
+
+      expect(fake.bought).toEqual([[1, true]]);
+    });
+
+    it("offers to clear the basket once something is in it", () => {
+      renderHome({
+        initialData: aViewData({
+          items: [aGrocery({ id: 1, name: "melk", bought: true })],
+        }),
+      });
+
+      expect(screen.getByText("1 in je mandje")).toBeInTheDocument();
+    });
+
+    it("counts nothing in the basket while nothing is checked", async () => {
+      const fake = renderHome({
+        initialData: aViewData({ items: [aGrocery({ id: 1, bought: false })] }),
+      });
+
+      expect(screen.getByText("0 in je mandje")).toBeInTheDocument();
+
+      // The bar is collapsed by CSS rather than unmounted, so the real
+      // guarantee is that clearing an empty basket deletes nothing.
+      await userEvent.click(screen.getByRole("button", { name: "Wissen" }));
+      expect(fake.deleted).toEqual([]);
+    });
+
+    it("clears only the checked items", async () => {
+      const fake = renderHome({
+        initialData: aViewData({
+          items: [
+            aGrocery({ id: 1, name: "melk", bought: true }),
+            aGrocery({ id: 2, name: "brood", bought: false }),
+            aGrocery({ id: 3, name: "kaas", bought: true }),
+          ],
+        }),
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Wissen" }));
+
+      expect(fake.deleted).toEqual([[1, 3]]);
+      expect(screen.queryByText("melk")).not.toBeInTheDocument();
+      expect(screen.getByText("brood")).toBeInTheDocument();
+    });
+  });
+
+  describe("the two lists", () => {
+    it("loads the personal list the first time it is opened", async () => {
+      const fake = renderHome({
+        personalData: aViewData({ items: [aGrocery({ id: 9, name: "scheermesjes" })] }),
+      });
+
+      await userEvent.click(screen.getByRole("tab", { name: /Persoonlijk/ }));
+
+      expect(fake.loaded).toContain(true);
+      expect(await screen.findByText("scheermesjes")).toBeInTheDocument();
+    });
+
+    it("keeps the two lists apart", async () => {
+      renderHome({
+        initialData: aViewData({ items: [aGrocery({ id: 1, name: "melk" })] }),
+        personalData: aViewData({ items: [aGrocery({ id: 9, name: "scheermesjes" })] }),
+      });
+
+      await userEvent.click(screen.getByRole("tab", { name: /Persoonlijk/ }));
+      await screen.findByText("scheermesjes");
+
+      expect(screen.queryByText("melk")).not.toBeInTheDocument();
+    });
+
+    it("adds to the personal list while that one is open", async () => {
+      const fake = renderHome();
+
+      await userEvent.click(screen.getByRole("tab", { name: /Persoonlijk/ }));
+      await userEvent.type(addBar(), "scheermesjes{Enter}");
+
+      expect(fake.created).toEqual([["scheermesjes", true, null]]);
+    });
+  });
+
+  describe("categories", () => {
+    it("files a new item under the category picked in the add bar", async () => {
+      const zuivel = aCategory({ id: 7, name: "Zuivel" });
+      const fake = renderHome({
+        initialData: aViewData({ items: [], categories: [zuivel] }),
+      });
+
+      await userEvent.click(screen.getByLabelText("Categorie voor nieuwe items"));
+      await userEvent.click(screen.getByRole("option", { name: "Zuivel" }));
+      await userEvent.type(addBar(), "melk{Enter}");
+
+      expect(fake.created).toEqual([["melk", false, 7]]);
+    });
+
+    it("keeps the items when their category is deleted", async () => {
+      const zuivel = aCategory({ id: 7, name: "Zuivel" });
+      const fake = renderHome({
+        initialData: aViewData({
+          items: [aGrocery({ id: 1, name: "melk", categoryId: 7, category: zuivel })],
+          categories: [zuivel],
+        }),
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Categorie Zuivel verwijderen" }));
+      const dialog = screen.getByRole("alertdialog");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Verwijderen" }));
+
+      expect(fake.categoriesDeleted).toEqual([7]);
+      expect(screen.getByText("melk")).toBeInTheDocument();
+    });
+  });
+});

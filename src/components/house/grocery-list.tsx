@@ -1,7 +1,8 @@
 "use client";
 
-import { Grocery, Category } from "@prisma/client";
+import { Category } from "@prisma/client";
 import { groupByCategory } from "@/src/lib/house/grocery-order";
+import type { GroceryWithCategory } from "@/src/lib/house/grocery-view";
 import { ShoppingCart, Trash2, Pencil, GripVertical, Check, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input";
@@ -29,8 +30,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-
-type GroceryWithCategory = Grocery & { category: Category | null };
 
 type GroceryListProps = {
   groceryList: GroceryWithCategory[];

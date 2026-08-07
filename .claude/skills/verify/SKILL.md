@@ -66,19 +66,29 @@ Nothing there stands in for our own code.
 Two limits. **Async Server Components cannot be rendered** by Testing Library,
 so `src/app/**/page.tsx` is out of reach — that is what Playwright is for.
 
-And a `"use client"` component that imports a server action directly pulls
-Prisma into the test process, so it cannot be rendered here at all. Five still
-do: `add-category.tsx`, `household-info.tsx`, `auth/sign-up-form.tsx`,
-`(tabs)/home/client-page.tsx` and `household-setup/household-setup-client.tsx`.
+No `"use client"` component imports a server action any more, so every one of
+them renders in a test. Keep it that way: a component that imports from
+`lib/actions` or `lib/geld/actions` pulls Prisma into the test process and
+becomes unrenderable.
 
-The fix is to take the action as a prop from the server page, which is ordinary
-Next, and let the test pass a fake. Do that to the component you are touching
-rather than reaching for `vi.mock`. The Geld route is the worked example and is
-fully converted: each part exports the operations it needs
-(`ItemSectionActions`, `AdjustmentsSectionActions`, `BeheerSheetActions`),
-`geld-page-client.tsx` unions them into `GeldActions`, and
-`(tabs)/geld/page.tsx` is the single place that names the real server actions.
-`house/grocery-list.tsx` works the same way with plain `on*` callbacks.
+The pattern throughout is that a component exports the operations it needs and
+the server page supplies them — ordinary Next, and a test passes a fake instead
+of reaching for `vi.mock`. Both routes are worked examples:
+
+- **Geld** — `ItemSectionActions`, `AdjustmentsSectionActions` and
+  `BeheerSheetActions` union into `GeldActions` in `geld-page-client.tsx`;
+  `(tabs)/geld/page.tsx` names the eight real actions.
+- **Home** — `HomeActions` in `client-page.tsx` (it includes `onLoadData`,
+  since polling `getHomeData` is a server action too); `(tabs)/home/page.tsx`
+  names the nine.
+
+Pure logic lives under `src/lib/`, not in the components: `geld/money.ts` and
+`geld/summary.ts`, `house/grocery-order.ts` (ordering and grouping) and
+`house/grocery-view.ts` (the optimistic list transforms and the add-bar name
+rules). Reach for those before writing a new transform inline.
+
+`tests/setup.ts` also stands in for `next-auth/react`, because `signIn`/`signOut`
+are client-only and a server page cannot hand them down.
 
 ## Checking a change by hand
 

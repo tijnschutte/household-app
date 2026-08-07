@@ -1,39 +1,59 @@
 "use client";
 
-import { Grocery, Household, Category } from "@prisma/client";
+import { Grocery, Household } from "@prisma/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { User, House, Plus, Tag, Loader2 } from "lucide-react";
-import { getHomeData } from "@/src/lib/data";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/src/components/ui/select";
 import {
-  createGroceryItem,
-  deleteItems,
-  restoreItems,
-  updateGroceryCategory,
-  deleteCategory,
-  updateGroceryName,
-  setGroceryBought,
-} from "@/src/lib/actions";
+  appendCategory,
+  appendItem,
+  isOptimistic,
+  moveItemToCategory,
+  parseItemName,
+  removeCategory,
+  removeItems,
+  renameItem as renameItemIn,
+  replaceItem,
+  setItemBought,
+  snapshotForRestore,
+  type GroceryWithCategory,
+  type RestoreSnapshot,
+  type ViewData,
+} from "@/src/lib/house/grocery-view";
 import GroceryList from "@/src/components/house/grocery-list";
-import AddCategory from "@/src/components/add-category";
+import AddCategory, { type AddCategoryActions } from "@/src/components/add-category";
 import PageHeader from "@/src/components/page-header";
 import HuisButton from "@/src/components/huis-button";
 import { toast } from "sonner";
 
-type GroceryWithCategory = Grocery & { category: Category | null };
-
-type ViewData = {
-  items: GroceryWithCategory[];
-  categories: Category[];
-};
+/**
+ * Everything the home screen can do, handed down from the server page in one
+ * prop. Reading the list is here too: getHomeData is a server action like the
+ * rest, and the page polls it. Keeps Prisma out of anything that renders this.
+ */
+export type HomeActions = {
+  onLoadData: (personal: boolean) => Promise<ViewData>;
+  onCreateItem: (
+    name: string,
+    personal: boolean,
+    categoryId?: number | null
+  ) => Promise<Grocery | GroceryWithCategory>;
+  onSetBought: (groceryId: number, bought: boolean) => Promise<unknown>;
+  onDeleteItems: (ids: number[]) => Promise<unknown>;
+  onRestoreItems: (items: RestoreSnapshot[]) => Promise<unknown>;
+  onUpdateItemCategory: (groceryId: number, categoryId: number | null) => Promise<unknown>;
+  onRenameItem: (groceryId: number, name: string) => Promise<unknown>;
+  onDeleteCategory: (categoryId: number) => Promise<unknown>;
+} & AddCategoryActions;
 
 type ViewKey = "household" | "personal";
 
 type HouseholdClientPageProps = {
   household: Household;
   initialData: ViewData;
+  actions: HomeActions;
 };
 
 // Compact 2-segment control replacing the old footer toggle buttons: one
@@ -86,7 +106,11 @@ function ViewToggle({
   );
 }
 
-export default function HouseholdClientPage({ household, initialData }: HouseholdClientPageProps) {
+export default function HouseholdClientPage({
+  household,
+  initialData,
+  actions,
+}: HouseholdClientPageProps) {
   // Both views are cached independently so toggling back and forth is instant
   // after the first visit. The household view is seeded server-side.
   const [dataByView, setDataByView] = useState<Record<ViewKey, ViewData | null>>({
@@ -127,27 +151,30 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   // deliberate, separate action rather than tucked inside a collapsed section.
   const boughtCount = groceryList.filter((item) => item.bought).length;
 
-  const fetchData = useCallback(async (view: ViewKey, options?: { silent?: boolean }) => {
-    const silent = options?.silent ?? false;
-    try {
-      const data = await getHomeData(view === "personal");
+  const fetchData = useCallback(
+    async (view: ViewKey, options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+      try {
+        const data = await actions.onLoadData(view === "personal");
 
-      // A poll finished while the user is mid-drag/mid-rename: don't clobber it.
-      if (silent && busyRef.current) return;
+        // A poll finished while the user is mid-drag/mid-rename: don't clobber it.
+        if (silent && busyRef.current) return;
 
-      setDataByView((prev) => {
-        const existing = prev[view];
-        // Avoid a pointless re-render when nothing actually changed.
-        if (existing && JSON.stringify(existing) === JSON.stringify(data)) {
-          return prev;
-        }
-        return { ...prev, [view]: data };
-      });
-    } catch (error) {
-      console.error("Failed to fetch data:", error);
-      if (!silent) toast.error("Laden van gegevens mislukt");
-    }
-  }, []);
+        setDataByView((prev) => {
+          const existing = prev[view];
+          // Avoid a pointless re-render when nothing actually changed.
+          if (existing && JSON.stringify(existing) === JSON.stringify(data)) {
+            return prev;
+          }
+          return { ...prev, [view]: data };
+        });
+      } catch (error) {
+        console.error("Failed to fetch data:", error);
+        if (!silent) toast.error("Laden van gegevens mislukt");
+      }
+    },
+    [actions]
+  );
 
   // Real-time sync: poll every 10s + refetch on tab focus, for the currently visible view only.
   useEffect(() => {
@@ -189,20 +216,12 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     // Optimistic toggle: flip locally right away, revert + error toast on failure.
     // Deliberately doesn't touch busyRef — this is a quick, low-risk mutation,
     // not a multi-step drag/edit that a poll refresh could clobber badly.
-    updateView(viewKey, (data) => ({
-      ...data,
-      items: data.items.map((item) => (item.id === groceryId ? { ...item, bought } : item)),
-    }));
+    updateView(viewKey, (data) => setItemBought(data, groceryId, bought));
 
     try {
-      await setGroceryBought(groceryId, bought);
+      await actions.onSetBought(groceryId, bought);
     } catch (error) {
-      updateView(viewKey, (data) => ({
-        ...data,
-        items: data.items.map((item) =>
-          item.id === groceryId ? { ...item, bought: !bought } : item
-        ),
-      }));
+      updateView(viewKey, (data) => setItemBought(data, groceryId, !bought));
       console.error("Failed to update bought state:", error);
       toast.error("Bijwerken mislukt");
     }
@@ -213,28 +232,18 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     if (boughtItems.length === 0) return;
 
     setIsClearingBought(true);
-    // Snapshot enough to restore each item on undo: name, category, and
-    // whether it lives in the household's shared scope or the caller's
-    // personal scope (mirrors createGroceryItem's `personal` flag).
-    const restoreSnapshot = boughtItems.map((item) => ({
-      name: item.name,
-      categoryId: item.categoryId,
-      personal: item.userId !== null,
-    }));
+    const restoreSnapshot = boughtItems.map(snapshotForRestore);
     const ids = boughtItems.map((item) => item.id);
 
     try {
-      await deleteItems(ids);
-      updateView(viewKey, (data) => ({
-        ...data,
-        items: data.items.filter((item) => !ids.includes(item.id)),
-      }));
+      await actions.onDeleteItems(ids);
+      updateView(viewKey, (data) => removeItems(data, ids));
       toast.success(`${ids.length} item${ids.length === 1 ? "" : "s"} verwijderd`, {
         action: {
           label: "Ongedaan maken",
           onClick: async () => {
             try {
-              await restoreItems(restoreSnapshot);
+              await actions.onRestoreItems(restoreSnapshot);
               fetchData(viewKey);
             } catch (error) {
               console.error("Failed to restore items:", error);
@@ -252,17 +261,13 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   };
 
   const addItem = async () => {
-    const trimmedName = itemName.trim();
-    if (!trimmedName) {
-      toast.error("Voer een itemnaam in");
+    const parsed = parseItemName(itemName);
+    if (!parsed.ok) {
+      toast.error(parsed.message);
       inputRef.current?.focus();
       return;
     }
-    if (trimmedName.length > 30) {
-      toast.error("Itemnaam mag maximaal 30 karakters zijn");
-      inputRef.current?.focus();
-      return;
-    }
+    const trimmedName = parsed.name;
 
     // Snapshot the resolved target category now, so a mid-flight chip change
     // or category deletion can't make the optimistic item and the server row
@@ -277,7 +282,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     const tempId = tempIdRef.current--;
     const optimisticItem: GroceryWithCategory = {
       id: tempId,
-      name: trimmedName.toLowerCase(),
+      name: trimmedName,
       quantity: 1,
       bought: false,
       householdId: showPersonal ? null : household.id,
@@ -288,10 +293,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
       updatedAt: new Date(),
     };
 
-    updateView(viewKey, (data) => ({
-      ...data,
-      items: [...data.items, optimisticItem],
-    }));
+    updateView(viewKey, (data) => appendItem(data, optimisticItem));
     setItemName("");
     inputRef.current?.focus();
     // Scroll the actual scrolling element (the <main> content area, not the
@@ -301,21 +303,19 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     });
 
     try {
-      const newItem = await createGroceryItem(trimmedName, showPersonal, addCategory?.id ?? null);
-      updateView(viewKey, (data) => ({
-        ...data,
-        items: data.items.map((item) =>
-          item.id === tempId ? { ...newItem, category: addCategory } : item
-        ),
-      }));
+      const newItem = await actions.onCreateItem(
+        trimmedName,
+        showPersonal,
+        addCategory?.id ?? null
+      );
+      updateView(viewKey, (data) =>
+        replaceItem(data, tempId, { ...newItem, category: addCategory })
+      );
     } catch (error) {
       console.error("Failed to create grocery item:", error);
       const errorMessage = error instanceof Error ? error.message : "Toevoegen mislukt";
       toast.error(errorMessage);
-      updateView(viewKey, (data) => ({
-        ...data,
-        items: data.items.filter((item) => item.id !== tempId),
-      }));
+      updateView(viewKey, (data) => removeItems(data, [tempId]));
     }
   };
 
@@ -328,31 +328,16 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     const categoryChanged = currentItem.categoryId !== categoryId;
     if (!categoryChanged) return; // Don't update or show toast if nothing changed
 
-    // Store previous state for rollback
-    const previousCategoryId = currentItem.categoryId;
     const previousCategory = currentItem.category;
 
     // Optimistic update - update local state immediately
     const targetCategory = categories.find((c) => c.id === categoryId) || null;
-    updateView(viewKey, (data) => ({
-      ...data,
-      items: data.items.map((item) =>
-        item.id === groceryId ? { ...item, categoryId, category: targetCategory } : item
-      ),
-    }));
+    updateView(viewKey, (data) => moveItemToCategory(data, groceryId, targetCategory));
 
     try {
-      await updateGroceryCategory(groceryId, categoryId);
+      await actions.onUpdateItemCategory(groceryId, categoryId);
     } catch (error) {
-      // Revert on error
-      updateView(viewKey, (data) => ({
-        ...data,
-        items: data.items.map((item) =>
-          item.id === groceryId
-            ? { ...item, categoryId: previousCategoryId, category: previousCategory }
-            : item
-        ),
-      }));
+      updateView(viewKey, (data) => moveItemToCategory(data, groceryId, previousCategory));
       console.error("Failed to update category:", error);
       toast.error("Verplaatsen mislukt");
     }
@@ -360,13 +345,8 @@ export default function HouseholdClientPage({ household, initialData }: Househol
 
   const handleDeleteCategory = async (categoryId: number) => {
     try {
-      await deleteCategory(categoryId);
-      updateView(viewKey, (data) => ({
-        items: data.items.map((item) =>
-          item.categoryId === categoryId ? { ...item, categoryId: null, category: null } : item
-        ),
-        categories: data.categories.filter((cat) => cat.id !== categoryId),
-      }));
+      await actions.onDeleteCategory(categoryId);
+      updateView(viewKey, (data) => removeCategory(data, categoryId));
       toast.success("Categorie verwijderd");
     } catch (error) {
       console.error("Failed to delete category:", error);
@@ -384,34 +364,24 @@ export default function HouseholdClientPage({ household, initialData }: Househol
   // Swipe-to-delete: remove a single item optimistically, with the same
   // undo-toast pattern as clearing the Afgevinkt section.
   const handleDeleteItem = async (groceryId: number) => {
-    // A negative id is an optimistic temp item whose create is still in
-    // flight; there is no server row to delete yet.
-    if (groceryId < 0) return;
+    // An optimistic temp item's create is still in flight; there is no server
+    // row to delete yet.
+    if (isOptimistic(groceryId)) return;
     const item = groceryList.find((i) => i.id === groceryId);
     if (!item) return;
 
-    const restoreSnapshot = [
-      {
-        name: item.name,
-        categoryId: item.categoryId,
-        personal: item.userId !== null,
-        bought: item.bought ?? false,
-      },
-    ];
+    const restoreSnapshot = [snapshotForRestore(item)];
 
-    updateView(viewKey, (data) => ({
-      ...data,
-      items: data.items.filter((i) => i.id !== groceryId),
-    }));
+    updateView(viewKey, (data) => removeItems(data, [groceryId]));
 
     try {
-      await deleteItems([groceryId]);
+      await actions.onDeleteItems([groceryId]);
       toast.success(`"${item.name}" verwijderd`, {
         action: {
           label: "Ongedaan maken",
           onClick: async () => {
             try {
-              await restoreItems(restoreSnapshot);
+              await actions.onRestoreItems(restoreSnapshot);
               fetchData(viewKey);
             } catch (error) {
               console.error("Failed to restore item:", error);
@@ -433,13 +403,8 @@ export default function HouseholdClientPage({ household, initialData }: Househol
     // next poll will return.
     const normalized = newName.trim().toLowerCase();
     try {
-      await updateGroceryName(groceryId, normalized);
-      updateView(viewKey, (data) => ({
-        ...data,
-        items: data.items.map((item) =>
-          item.id === groceryId ? { ...item, name: normalized } : item
-        ),
-      }));
+      await actions.onRenameItem(groceryId, normalized);
+      updateView(viewKey, (data) => renameItemIn(data, groceryId, normalized));
       toast.success("Item hernoemd");
     } catch (error) {
       console.error("Failed to rename item:", error);
@@ -572,13 +537,11 @@ export default function HouseholdClientPage({ household, initialData }: Househol
               showPersonal={showPersonal}
               open={pickerAddOpen}
               onOpenChange={setPickerAddOpen}
+              onCreateCategory={actions.onCreateCategory}
               onCategoryAdded={(category) => {
                 // Target the fresh category right away (optimistically, so the
                 // chip doesn't wait on the refetch) — the user was mid-add.
-                updateView(viewKey, (data) => ({
-                  ...data,
-                  categories: [...data.categories, category],
-                }));
+                updateView(viewKey, (data) => appendCategory(data, category));
                 setTargetCategoryId(category.id);
                 fetchData(viewKey, { silent: true });
                 inputRef.current?.focus();
@@ -601,6 +564,7 @@ export default function HouseholdClientPage({ household, initialData }: Househol
           </div>
           <Button
             size="icon"
+            aria-label="Item toevoegen"
             onMouseDown={(e) => {
               e.preventDefault();
               addItem();

@@ -13,8 +13,16 @@ import {
   DialogTitle,
 } from "@/src/components/ui/dialog";
 import { Category } from "@prisma/client";
-import { createCategory } from "@/src/lib/actions";
 import { toast } from "sonner";
+
+/**
+ * The one operation this dialog needs, owned here rather than imported from
+ * the action module: the server page passes the real server action in, and a
+ * test passes a fake. Keeps Prisma out of anything that renders this.
+ */
+export type AddCategoryActions = {
+  onCreateCategory: (name: string, personal: boolean) => Promise<Category>;
+};
 
 type AddCategoryProps = {
   showPersonal: boolean;
@@ -22,13 +30,14 @@ type AddCategoryProps = {
   // Controlled from the add-bar's category picker ("+ Nieuwe categorie").
   open: boolean;
   onOpenChange: (open: boolean) => void;
-};
+} & AddCategoryActions;
 
 export default function AddCategory({
   showPersonal,
   onCategoryAdded,
   open,
   onOpenChange,
+  onCreateCategory,
 }: AddCategoryProps) {
   const [categoryName, setCategoryName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -49,7 +58,7 @@ export default function AddCategory({
 
     setIsCreating(true);
     try {
-      const category = await createCategory(categoryName, showPersonal);
+      const category = await onCreateCategory(categoryName, showPersonal);
       toast.success(`Categorie "${categoryName}" aangemaakt`);
       setCategoryName("");
       setIsOpen(false);
