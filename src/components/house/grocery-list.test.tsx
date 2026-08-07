@@ -29,7 +29,9 @@ function renderList(overrides: Partial<Props> = {}) {
     onRenameItem: (id, name) => renamed.push([id, name]),
     onAddToCategory: (id) => addedTo.push(id),
     onDeleteItem: (id) => itemsDeleted.push(id),
-    busyRef,
+    onBusyChange: (busy) => {
+      busyRef.current = busy;
+    },
     ...overrides,
   };
 

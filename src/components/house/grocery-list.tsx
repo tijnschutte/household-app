@@ -50,8 +50,12 @@ type GroceryListProps = {
   onAddToCategory?: (categoryId: number) => void;
   /** Swipe-to-delete on a row: delete this single item (with undo toast upstream). */
   onDeleteItem: (groceryId: number) => void;
-  /** Set to true while a drag or inline rename is in progress, so callers (e.g. polling) can skip clobbering it. */
-  busyRef?: React.MutableRefObject<boolean>;
+  /**
+   * True while a drag or inline rename is in progress. The caller decides what
+   * to do about it — polling skips a silent refresh rather than clobbering an
+   * edit in flight. Reported, not written into a ref the caller lends us.
+   */
+  onBusyChange: (busy: boolean) => void;
 };
 
 // The leading round checkbox: purely visual (a bordered circle, filled with a
@@ -547,7 +551,7 @@ export default function GroceryList({
   onRenameItem,
   onAddToCategory,
   onDeleteItem,
-  busyRef,
+  onBusyChange,
 }: GroceryListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
@@ -563,9 +567,7 @@ export default function GroceryList({
     } else {
       editingIdsRef.current.delete(id);
     }
-    if (busyRef) {
-      busyRef.current = activeDragId !== null || editingIdsRef.current.size > 0;
-    }
+    onBusyChange(activeDragId !== null || editingIdsRef.current.size > 0);
   };
 
   useEffect(() => {
@@ -590,13 +592,13 @@ export default function GroceryList({
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDragId(event.active.id as number);
-    if (busyRef) busyRef.current = true;
+    onBusyChange(true);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveDragId(null);
-    if (busyRef) busyRef.current = editingIdsRef.current.size > 0;
+    onBusyChange(editingIdsRef.current.size > 0);
 
     if (!over) return;
 

@@ -446,7 +446,9 @@ export default function HouseholdClientPage({
           onRenameItem={handleRenameItem}
           onAddToCategory={handleAddToCategory}
           onDeleteItem={handleDeleteItem}
-          busyRef={busyRef}
+          onBusyChange={(busy) => {
+            busyRef.current = busy;
+          }}
         />
       </main>
 
