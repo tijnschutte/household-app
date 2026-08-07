@@ -92,6 +92,17 @@ describe("GroceryList", () => {
       expect(within(header("Zuivel")).getByText("1")).toBeInTheDocument();
     });
 
+    it("counts the same way in the uncategorized header", () => {
+      renderList({
+        groceryList: [
+          aGrocery({ id: 1, name: "losse peer" }),
+          aGrocery({ id: 2, name: "brood", bought: true }),
+        ],
+      });
+
+      expect(within(header("Geen categorie")).getByText("1")).toBeInTheDocument();
+    });
+
     it("hides a category that holds nothing, to keep the list tidy", () => {
       renderList({ groceryList: [], categories: [zuivel] });
 

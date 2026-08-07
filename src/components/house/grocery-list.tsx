@@ -9,7 +9,7 @@ import {
 } from "@/src/lib/house/grocery-order";
 import { MAX_ITEM_NAME_LENGTH, type GroceryWithCategory } from "@/src/lib/house/grocery-view";
 import { ShoppingCart, Trash2, Pencil, GripVertical, Check, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input";
 import {
   DndContext,
@@ -50,7 +50,6 @@ type GroceryListProps = {
   onAddToCategory?: (categoryId: number) => void;
   /** Swipe-to-delete on a row: delete this single item (with undo toast upstream). */
   onDeleteItem: (groceryId: number) => void;
-  showCategories?: boolean;
   /** Set to true while a drag or inline rename is in progress, so callers (e.g. polling) can skip clobbering it. */
   busyRef?: React.MutableRefObject<boolean>;
 };
@@ -370,21 +369,53 @@ function DraggableGroceryItem({
   );
 }
 
-function UncategorizedItems({
-  items,
-  isDragActive,
-  onToggleBought,
-  onRenameItem,
-  onDeleteItem,
-  onItemEditingChange,
-}: {
-  /** Both checked and unchecked items — unchecked first, checked sunk below (WP-10). */
-  items: GroceryWithCategory[];
-  isDragActive: boolean;
+/**
+ * What can be done to a row, supplied once by GroceryList.
+ *
+ * The zone components below are about layout and drop targets; which callback
+ * a row fires is none of their business. Passing these through them meant a new
+ * row operation had to be threaded through every zone on the way down.
+ */
+type RowActions = {
   onToggleBought: (id: number, bought: boolean) => void;
   onRenameItem: (groceryId: number, newName: string) => void;
   onDeleteItem: (groceryId: number) => void;
-  onItemEditingChange?: (id: number, editing: boolean) => void;
+  onItemEditingChange: (id: number, editing: boolean) => void;
+};
+
+const RowActionsContext = createContext<RowActions | null>(null);
+
+/**
+ * The rows of one group. The per-item bindings live here so the two zones
+ * cannot disagree about them — notably the `?? false` an absent `bought` needs.
+ */
+function GroceryRows({ items }: { items: GroceryWithCategory[] }) {
+  const actions = useContext(RowActionsContext);
+  // Only GroceryList renders these, and it always provides the context.
+  if (!actions) throw new Error("GroceryRows rendered outside GroceryList");
+
+  return items.map((item) => (
+    <DraggableGroceryItem
+      key={item.id}
+      item={item}
+      onToggleBought={() => actions.onToggleBought(item.id, !(item.bought ?? false))}
+      onRename={(newName) => actions.onRenameItem(item.id, newName)}
+      onDelete={() => actions.onDeleteItem(item.id)}
+      onEditingChange={(editing) => actions.onItemEditingChange(item.id, editing)}
+    />
+  ));
+}
+
+function UncategorizedItems({
+  items,
+  uncheckedCount,
+  isDragActive,
+}: {
+  /** Both checked and unchecked items — unchecked first, checked sunk below (WP-10). */
+  items: GroceryWithCategory[];
+  /** Header shows what's left to buy, not the total (WP-10). */
+  uncheckedCount: number;
+  isDragActive: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: UNCATEGORIZED_DROP_ID });
 
@@ -417,20 +448,9 @@ function UncategorizedItems({
           belonging to the section above them. */}
       <h3 className="px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Geen categorie
-        <span className="ml-1.5 font-normal normal-case text-gray-400">
-          {items.filter((item) => !item.bought).length}
-        </span>
+        <span className="ml-1.5 font-normal normal-case text-gray-400">{uncheckedCount}</span>
       </h3>
-      {items.map((item) => (
-        <DraggableGroceryItem
-          key={item.id}
-          item={item}
-          onToggleBought={() => onToggleBought(item.id, !(item.bought ?? false))}
-          onRename={(newName) => onRenameItem(item.id, newName)}
-          onDelete={() => onDeleteItem(item.id)}
-          onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
-        />
-      ))}
+      <GroceryRows items={items} />
     </div>
   );
 }
@@ -440,12 +460,8 @@ function DroppableCategory({
   title,
   items,
   uncheckedCount,
-  onToggleBought,
   onDelete,
-  onRenameItem,
   onAdd,
-  onDeleteItem,
-  onItemEditingChange,
   isDragActive,
 }: {
   id: string;
@@ -454,12 +470,8 @@ function DroppableCategory({
   items: GroceryWithCategory[];
   /** Header shows what's left to buy, not the total (WP-10). */
   uncheckedCount: number;
-  onToggleBought: (id: number, bought: boolean) => void;
   onDelete?: () => void;
-  onRenameItem: (groceryId: number, newName: string) => void;
   onAdd?: () => void;
-  onDeleteItem: (groceryId: number) => void;
-  onItemEditingChange?: (id: number, editing: boolean) => void;
   isDragActive: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -518,16 +530,7 @@ function DroppableCategory({
         )
       ) : (
         <div className="space-y-1">
-          {items.map((item) => (
-            <DraggableGroceryItem
-              key={item.id}
-              item={item}
-              onToggleBought={() => onToggleBought(item.id, !(item.bought ?? false))}
-              onRename={(newName) => onRenameItem(item.id, newName)}
-              onDelete={() => onDeleteItem(item.id)}
-              onEditingChange={(editing) => onItemEditingChange?.(item.id, editing)}
-            />
-          ))}
+          <GroceryRows items={items} />
         </div>
       )}
     </div>
@@ -544,7 +547,6 @@ export default function GroceryList({
   onRenameItem,
   onAddToCategory,
   onDeleteItem,
-  showCategories = true,
   busyRef,
 }: GroceryListProps) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -601,6 +603,13 @@ export default function GroceryList({
     onDragEnd(active.id as number, resolveDropCategory(over.id.toString(), groceryList));
   };
 
+  const rowActions: RowActions = {
+    onToggleBought,
+    onRenameItem,
+    onDeleteItem,
+    onItemEditingChange: handleItemEditingChange,
+  };
+
   // A non-empty category asks for confirmation first; an empty one (counting
   // bought items too — they'd silently lose their category) deletes directly.
   const requestDeleteCategory = (category: Category) => {
@@ -620,8 +629,7 @@ export default function GroceryList({
   const isDragActive = activeDragId !== null;
   const activeItem = groceryList.find((item) => item.id === activeDragId);
 
-  // Render list content (common for both draggable and non-draggable modes)
-  const renderContent = () => (
+  const content = (
     <div ref={listRef} className="w-full">
       {isLoading && (
         <div className="flex items-center justify-center p-8 text-gray-500">
@@ -644,52 +652,28 @@ export default function GroceryList({
         <div className="divide-y divide-gray-200">
           {/* Categorized Sections - Show all categories, even ones that are
               empty or fully checked (sortGroup never drops checked items) */}
-          {showCategories &&
-            categorizedItems.map(({ category, items, uncheckedCount }) => (
-              <DroppableCategory
-                key={category.id}
-                id={categoryDropId(category.id)}
-                title={category.name}
-                items={items}
-                uncheckedCount={uncheckedCount}
-                onToggleBought={onToggleBought}
-                onDelete={() => requestDeleteCategory(category)}
-                onRenameItem={onRenameItem}
-                onAdd={onAddToCategory ? () => onAddToCategory(category.id) : undefined}
-                onDeleteItem={onDeleteItem}
-                onItemEditingChange={handleItemEditingChange}
-                isDragActive={isDragActive}
-              />
-            ))}
+          {categorizedItems.map(({ category, items, uncheckedCount }) => (
+            <DroppableCategory
+              key={category.id}
+              id={categoryDropId(category.id)}
+              title={category.name}
+              items={items}
+              uncheckedCount={uncheckedCount}
+              onDelete={() => requestDeleteCategory(category)}
+              onAdd={onAddToCategory ? () => onAddToCategory(category.id) : undefined}
+              isDragActive={isDragActive}
+            />
+          ))}
 
           {/* Uncategorized zone - only while it has items (checked or
               unchecked), or as a thin labeled drop line while a drag is in
               progress */}
-          {showCategories && (uncategorizedGroup.items.length > 0 || isDragActive) && (
+          {(uncategorizedGroup.items.length > 0 || isDragActive) && (
             <UncategorizedItems
               items={uncategorizedGroup.items}
+              uncheckedCount={uncategorizedGroup.uncheckedCount}
               isDragActive={isDragActive}
-              onToggleBought={onToggleBought}
-              onRenameItem={onRenameItem}
-              onDeleteItem={onDeleteItem}
-              onItemEditingChange={handleItemEditingChange}
             />
-          )}
-
-          {/* Simple list when categories are disabled */}
-          {!showCategories && uncategorizedGroup.items.length > 0 && (
-            <div className="space-y-1 py-3">
-              {uncategorizedGroup.items.map((item) => (
-                <DraggableGroceryItem
-                  key={item.id}
-                  item={item}
-                  onToggleBought={() => onToggleBought(item.id, !(item.bought ?? false))}
-                  onRename={(newName) => onRenameItem(item.id, newName)}
-                  onDelete={() => onDeleteItem(item.id)}
-                  onEditingChange={(editing) => handleItemEditingChange(item.id, editing)}
-                />
-              ))}
-            </div>
           )}
         </div>
       )}
@@ -725,13 +709,6 @@ export default function GroceryList({
     </div>
   );
 
-  const content = renderContent();
-
-  // When categories are disabled, render simple list without DndContext
-  if (!showCategories) {
-    return content;
-  }
-
   // The list content must render in the server HTML so WP-2's fast first paint
   // isn't wasted. What is gated on mount is only the parts that touch
   // window/DOM — the sensors and the overlay — and never the element type of
@@ -749,7 +726,7 @@ export default function GroceryList({
         acceleration: 15,
       }}
     >
-      {content}
+      <RowActionsContext.Provider value={rowActions}>{content}</RowActionsContext.Provider>
 
       <DragOverlay>
         {activeItem ? (
