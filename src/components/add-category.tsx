@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/src/components/ui/dialog";
 import { Category } from "@prisma/client";
+import type { ViewKey } from "@/src/lib/house/grocery-view";
 import { toast } from "sonner";
 
 /**
@@ -21,11 +22,11 @@ import { toast } from "sonner";
  * test passes a fake. Keeps Prisma out of anything that renders this.
  */
 export type AddCategoryActions = {
-  onCreateCategory: (name: string, personal: boolean) => Promise<Category>;
+  onCreateCategory: (name: string, view: ViewKey) => Promise<Category>;
 };
 
 type AddCategoryProps = {
-  showPersonal: boolean;
+  view: ViewKey;
   onCategoryAdded: (category: Category) => void;
   // Controlled from the add-bar's category picker ("+ Nieuwe categorie").
   open: boolean;
@@ -33,7 +34,7 @@ type AddCategoryProps = {
 } & AddCategoryActions;
 
 export default function AddCategory({
-  showPersonal,
+  view,
   onCategoryAdded,
   open,
   onOpenChange,
@@ -58,7 +59,7 @@ export default function AddCategory({
 
     setIsCreating(true);
     try {
-      const category = await onCreateCategory(categoryName, showPersonal);
+      const category = await onCreateCategory(categoryName, view);
       toast.success(`Categorie "${categoryName}" aangemaakt`);
       setCategoryName("");
       setIsOpen(false);

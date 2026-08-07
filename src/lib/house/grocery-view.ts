@@ -7,6 +7,12 @@ import type { Grocery, Category } from "@prisma/client";
 
 export type GroceryWithCategory = Grocery & { category: Category | null };
 
+/**
+ * Which of the two lists is on screen. The word for it, so the UI never has to
+ * carry a bare boolean and remember which way round `true` means.
+ */
+export type ViewKey = "household" | "personal";
+
 /** One of the two lists (household or personal) as it is currently shown. */
 export type ViewData = {
   items: GroceryWithCategory[];

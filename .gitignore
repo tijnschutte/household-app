@@ -7,6 +7,10 @@ dist/
 .vercel
 *.tsbuildinfo
 
+# Playwright run output (bun run e2e)
+test-results/
+playwright-report/
+
 # Local dev file storage for the docs vault (src/lib/storage/local-disk.ts)
 .uploads/
 

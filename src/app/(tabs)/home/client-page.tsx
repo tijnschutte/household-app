@@ -22,6 +22,7 @@ import {
   type GroceryWithCategory,
   type RestoreSnapshot,
   type ViewData,
+  type ViewKey,
 } from "@/src/lib/house/grocery-view";
 import GroceryList from "@/src/components/house/grocery-list";
 import AddCategory, { type AddCategoryActions } from "@/src/components/add-category";
@@ -35,10 +36,10 @@ import { toast } from "sonner";
  * rest, and the page polls it. Keeps Prisma out of anything that renders this.
  */
 export type HomeActions = {
-  onLoadData: (personal: boolean) => Promise<ViewData>;
+  onLoadData: (view: ViewKey) => Promise<ViewData>;
   onCreateItem: (
     name: string,
-    personal: boolean,
+    view: ViewKey,
     categoryId?: number | null
   ) => Promise<Grocery | GroceryWithCategory>;
   onSetBought: (groceryId: number, bought: boolean) => Promise<unknown>;
@@ -48,8 +49,6 @@ export type HomeActions = {
   onRenameItem: (groceryId: number, name: string) => Promise<unknown>;
   onDeleteCategory: (categoryId: number) => Promise<unknown>;
 } & AddCategoryActions;
-
-type ViewKey = "household" | "personal";
 
 type HouseholdClientPageProps = {
   /**
@@ -66,13 +65,8 @@ type HouseholdClientPageProps = {
 // rounded track, a sliding active pill, icon + Dutch label per segment.
 // It's navigation (which list you're looking at), not an action, so it
 // lives under the header rather than competing with the add bar.
-function ViewToggle({
-  showPersonal,
-  onToggle,
-}: {
-  showPersonal: boolean;
-  onToggle: (personal: boolean) => void;
-}) {
+function ViewToggle({ view, onToggle }: { view: ViewKey; onToggle: (view: ViewKey) => void }) {
+  const isPersonal = view === "personal";
   return (
     <div
       role="tablist"
@@ -82,15 +76,15 @@ function ViewToggle({
       <span
         aria-hidden
         className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-card shadow-sm transition-transform duration-200 ease-out"
-        style={{ transform: showPersonal ? "translateX(100%)" : "translateX(0)" }}
+        style={{ transform: isPersonal ? "translateX(100%)" : "translateX(0)" }}
       />
       <button
         type="button"
         role="tab"
-        aria-selected={!showPersonal}
-        onClick={() => onToggle(false)}
+        aria-selected={!isPersonal}
+        onClick={() => onToggle("household")}
         className={`relative z-10 flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors ${
-          !showPersonal ? "text-primary" : "text-muted-foreground"
+          !isPersonal ? "text-primary" : "text-muted-foreground"
         }`}
       >
         <House className="w-4 h-4" />
@@ -99,10 +93,10 @@ function ViewToggle({
       <button
         type="button"
         role="tab"
-        aria-selected={showPersonal}
-        onClick={() => onToggle(true)}
+        aria-selected={isPersonal}
+        onClick={() => onToggle("personal")}
         className={`relative z-10 flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors ${
-          showPersonal ? "text-primary" : "text-muted-foreground"
+          isPersonal ? "text-primary" : "text-muted-foreground"
         }`}
       >
         <User className="w-4 h-4" />
@@ -123,7 +117,7 @@ export default function HouseholdClientPage({
     household: initialData,
     personal: null,
   });
-  const [showPersonal, setShowPersonal] = useState(false);
+  const [view, setView] = useState<ViewKey>("household");
   const [itemName, setItemName] = useState("");
   const [isClearingBought, setIsClearingBought] = useState(false);
   // The category new items land in ("quick add with category"). Sticky across
@@ -143,8 +137,7 @@ export default function HouseholdClientPage({
   // collide with a real (positive) database id.
   const tempIdRef = useRef(-1);
 
-  const viewKey: ViewKey = showPersonal ? "personal" : "household";
-  const currentView = dataByView[viewKey];
+  const currentView = dataByView[view];
   const groceryList = currentView?.items ?? [];
   const categories = currentView?.categories ?? [];
   const isLoading = currentView === null;
@@ -161,7 +154,7 @@ export default function HouseholdClientPage({
     async (view: ViewKey, options?: { silent?: boolean }) => {
       const silent = options?.silent ?? false;
       try {
-        const data = await actions.onLoadData(view === "personal");
+        const data = await actions.onLoadData(view);
 
         // A poll finished while the user is mid-drag/mid-rename: don't clobber it.
         if (silent && busyRef.current) return;
@@ -184,11 +177,11 @@ export default function HouseholdClientPage({
 
   // Real-time sync: poll every 10s + refetch on tab focus, for the currently visible view only.
   useEffect(() => {
-    const interval = setInterval(() => fetchData(viewKey, { silent: true }), 10000);
+    const interval = setInterval(() => fetchData(view, { silent: true }), 10000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        fetchData(viewKey, { silent: true });
+        fetchData(view, { silent: true });
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -197,16 +190,15 @@ export default function HouseholdClientPage({
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [fetchData, viewKey]);
+  }, [fetchData, view]);
 
-  const handleToggleView = (personal: boolean) => {
-    setShowPersonal(personal);
+  const handleToggleView = (next: ViewKey) => {
+    setView(next);
     // The target category belongs to the previously visible list; the other
     // list has its own categories, so reset to "Geen categorie".
     setTargetCategoryId(null);
-    const key: ViewKey = personal ? "personal" : "household";
-    if (dataByView[key] === null) {
-      fetchData(key);
+    if (dataByView[next] === null) {
+      fetchData(next);
     }
   };
 
@@ -222,12 +214,12 @@ export default function HouseholdClientPage({
     // Optimistic toggle: flip locally right away, revert + error toast on failure.
     // Deliberately doesn't touch busyRef — this is a quick, low-risk mutation,
     // not a multi-step drag/edit that a poll refresh could clobber badly.
-    updateView(viewKey, (data) => setItemBought(data, groceryId, bought));
+    updateView(view, (data) => setItemBought(data, groceryId, bought));
 
     try {
       await actions.onSetBought(groceryId, bought);
     } catch (error) {
-      updateView(viewKey, (data) => setItemBought(data, groceryId, !bought));
+      updateView(view, (data) => setItemBought(data, groceryId, !bought));
       console.error("Failed to update bought state:", error);
       toast.error("Bijwerken mislukt");
     }
@@ -243,14 +235,14 @@ export default function HouseholdClientPage({
 
     try {
       await actions.onDeleteItems(ids);
-      updateView(viewKey, (data) => removeItems(data, ids));
+      updateView(view, (data) => removeItems(data, ids));
       toast.success(`${ids.length} item${ids.length === 1 ? "" : "s"} verwijderd`, {
         action: {
           label: "Ongedaan maken",
           onClick: async () => {
             try {
               await actions.onRestoreItems(restoreSnapshot);
-              fetchData(viewKey);
+              fetchData(view);
             } catch (error) {
               console.error("Failed to restore items:", error);
               toast.error("Herstellen mislukt");
@@ -291,7 +283,7 @@ export default function HouseholdClientPage({
       name: trimmedName,
       quantity: 1,
       bought: false,
-      householdId: showPersonal ? null : householdId,
+      householdId: view === "personal" ? null : householdId,
       userId: null,
       categoryId: addCategory?.id ?? null,
       category: addCategory,
@@ -299,7 +291,7 @@ export default function HouseholdClientPage({
       updatedAt: new Date(),
     };
 
-    updateView(viewKey, (data) => appendItem(data, optimisticItem));
+    updateView(view, (data) => appendItem(data, optimisticItem));
     setItemName("");
     inputRef.current?.focus();
     // Scroll the actual scrolling element (the <main> content area, not the
@@ -309,19 +301,13 @@ export default function HouseholdClientPage({
     });
 
     try {
-      const newItem = await actions.onCreateItem(
-        trimmedName,
-        showPersonal,
-        addCategory?.id ?? null
-      );
-      updateView(viewKey, (data) =>
-        replaceItem(data, tempId, { ...newItem, category: addCategory })
-      );
+      const newItem = await actions.onCreateItem(trimmedName, view, addCategory?.id ?? null);
+      updateView(view, (data) => replaceItem(data, tempId, { ...newItem, category: addCategory }));
     } catch (error) {
       console.error("Failed to create grocery item:", error);
       const errorMessage = error instanceof Error ? error.message : "Toevoegen mislukt";
       toast.error(errorMessage);
-      updateView(viewKey, (data) => removeItems(data, [tempId]));
+      updateView(view, (data) => removeItems(data, [tempId]));
     }
   };
 
@@ -338,12 +324,12 @@ export default function HouseholdClientPage({
 
     // Optimistic update - update local state immediately
     const targetCategory = categories.find((c) => c.id === categoryId) || null;
-    updateView(viewKey, (data) => moveItemToCategory(data, groceryId, targetCategory));
+    updateView(view, (data) => moveItemToCategory(data, groceryId, targetCategory));
 
     try {
       await actions.onUpdateItemCategory(groceryId, categoryId);
     } catch (error) {
-      updateView(viewKey, (data) => moveItemToCategory(data, groceryId, previousCategory));
+      updateView(view, (data) => moveItemToCategory(data, groceryId, previousCategory));
       console.error("Failed to update category:", error);
       toast.error("Verplaatsen mislukt");
     }
@@ -352,7 +338,7 @@ export default function HouseholdClientPage({
   const handleDeleteCategory = async (categoryId: number) => {
     try {
       await actions.onDeleteCategory(categoryId);
-      updateView(viewKey, (data) => removeCategory(data, categoryId));
+      updateView(view, (data) => removeCategory(data, categoryId));
       toast.success("Categorie verwijderd");
     } catch (error) {
       console.error("Failed to delete category:", error);
@@ -378,7 +364,7 @@ export default function HouseholdClientPage({
 
     const restoreSnapshot = [snapshotForRestore(item)];
 
-    updateView(viewKey, (data) => removeItems(data, [groceryId]));
+    updateView(view, (data) => removeItems(data, [groceryId]));
 
     try {
       await actions.onDeleteItems([groceryId]);
@@ -388,7 +374,7 @@ export default function HouseholdClientPage({
           onClick: async () => {
             try {
               await actions.onRestoreItems(restoreSnapshot);
-              fetchData(viewKey);
+              fetchData(view);
             } catch (error) {
               console.error("Failed to restore item:", error);
               toast.error("Herstellen mislukt");
@@ -398,7 +384,7 @@ export default function HouseholdClientPage({
       });
     } catch (error) {
       // Revert: put the item back where it was.
-      updateView(viewKey, (data) => ({ ...data, items: [...data.items, item] }));
+      updateView(view, (data) => ({ ...data, items: [...data.items, item] }));
       console.error("Failed to delete item:", error);
       toast.error("Verwijderen mislukt");
     }
@@ -415,7 +401,7 @@ export default function HouseholdClientPage({
     const normalized = parsed.name;
     try {
       await actions.onRenameItem(groceryId, normalized);
-      updateView(viewKey, (data) => renameItemIn(data, groceryId, normalized));
+      updateView(view, (data) => renameItemIn(data, groceryId, normalized));
       toast.success("Item hernoemd");
     } catch (error) {
       console.error("Failed to rename item:", error);
@@ -433,7 +419,7 @@ export default function HouseholdClientPage({
           list you're looking at), kept away from the footer now that the
           platform tab bar lives down there too. */}
       <div className="w-full max-w-2xl mx-auto shrink-0 px-4 pt-3">
-        <ViewToggle showPersonal={showPersonal} onToggle={handleToggleView} />
+        <ViewToggle view={view} onToggle={handleToggleView} />
       </div>
 
       {/* Main scrollable content area */}
@@ -546,16 +532,16 @@ export default function HouseholdClientPage({
               </SelectContent>
             </Select>
             <AddCategory
-              showPersonal={showPersonal}
+              view={view}
               open={pickerAddOpen}
               onOpenChange={setPickerAddOpen}
               onCreateCategory={actions.onCreateCategory}
               onCategoryAdded={(category) => {
                 // Target the fresh category right away (optimistically, so the
                 // chip doesn't wait on the refetch) — the user was mid-add.
-                updateView(viewKey, (data) => appendCategory(data, category));
+                updateView(view, (data) => appendCategory(data, category));
                 setTargetCategoryId(category.id);
-                fetchData(viewKey, { silent: true });
+                fetchData(view, { silent: true });
                 inputRef.current?.focus();
               }}
             />

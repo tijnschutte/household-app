@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import HouseholdClientPage, { type HomeActions } from "./client-page";
 import { aCategory, aGrocery, aViewData } from "@/tests/fixtures/house";
-import type { ViewData } from "@/src/lib/house/grocery-view";
+import type { ViewData, ViewKey } from "@/src/lib/house/grocery-view";
 
 const householdId = 1;
 
@@ -16,22 +16,22 @@ function fakeActions({
   personalData = aViewData(),
   failCreate = false,
 }: { personalData?: ViewData; failCreate?: boolean } = {}) {
-  const created: Array<[string, boolean, number | null | undefined]> = [];
+  const created: Array<[string, ViewKey, number | null | undefined]> = [];
   const bought: Array<[number, boolean]> = [];
   const deleted: number[][] = [];
   const restored: unknown[] = [];
   const renamed: Array<[number, string]> = [];
   const categoriesDeleted: number[] = [];
-  const loaded: boolean[] = [];
+  const loaded: ViewKey[] = [];
 
   const actions: HomeActions = {
-    onLoadData: async (personal) => {
-      loaded.push(personal);
-      return personal ? personalData : aViewData();
+    onLoadData: async (view) => {
+      loaded.push(view);
+      return view === "personal" ? personalData : aViewData();
     },
-    onCreateItem: async (name, personal, categoryId) => {
+    onCreateItem: async (name, view, categoryId) => {
       if (failCreate) throw new Error("Toevoegen mislukt");
-      created.push([name, personal, categoryId]);
+      created.push([name, view, categoryId]);
       return aGrocery({ id: 500 + created.length, name, categoryId: categoryId ?? null });
     },
     onSetBought: async (id, next) => {
@@ -90,7 +90,7 @@ describe("HouseholdClientPage", () => {
       await userEvent.type(addBar(), "brood");
       await userEvent.click(screen.getByRole("button", { name: "Item toevoegen" }));
 
-      expect(fake.created).toEqual([["brood", false, null]]);
+      expect(fake.created).toEqual([["brood", "household", null]]);
     });
 
     it("shows the item straight away, before the server has answered", async () => {
@@ -116,7 +116,7 @@ describe("HouseholdClientPage", () => {
 
       await userEvent.type(addBar(), "brood{Enter}");
 
-      expect(fake.created).toEqual([["brood", false, null]]);
+      expect(fake.created).toEqual([["brood", "household", null]]);
     });
 
     it("refuses a blank name without touching the server", async () => {
@@ -223,7 +223,7 @@ describe("HouseholdClientPage", () => {
 
       await userEvent.click(screen.getByRole("tab", { name: /Persoonlijk/ }));
 
-      expect(fake.loaded).toContain(true);
+      expect(fake.loaded).toContain("personal");
       expect(await screen.findByText("scheermesjes")).toBeInTheDocument();
     });
 
@@ -245,7 +245,7 @@ describe("HouseholdClientPage", () => {
       await userEvent.click(screen.getByRole("tab", { name: /Persoonlijk/ }));
       await userEvent.type(addBar(), "scheermesjes{Enter}");
 
-      expect(fake.created).toEqual([["scheermesjes", true, null]]);
+      expect(fake.created).toEqual([["scheermesjes", "personal", null]]);
     });
   });
 
@@ -260,7 +260,7 @@ describe("HouseholdClientPage", () => {
       await userEvent.click(screen.getByRole("option", { name: "Zuivel" }));
       await userEvent.type(addBar(), "melk{Enter}");
 
-      expect(fake.created).toEqual([["melk", false, 7]]);
+      expect(fake.created).toEqual([["melk", "household", 7]]);
     });
 
     it("keeps the items when their category is deleted", async () => {

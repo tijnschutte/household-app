@@ -1,6 +1,7 @@
 import { getCurrentHousehold, getHomeData } from "@/src/lib/data";
 import { redirect } from "next/navigation";
 import HouseholdClientPage, { type HomeActions } from "./client-page";
+import type { ViewKey } from "@/src/lib/house/grocery-view";
 import { auth } from "@/src/lib/auth";
 import {
   createCategory,
@@ -14,17 +15,37 @@ import {
 } from "@/src/lib/actions";
 
 // The composition root for the home page: the only place that knows which
-// server action backs each operation the UI offers.
+// server action backs each operation the UI offers — and the only place that
+// translates the screen's vocabulary ("which list am I on") into the scoping
+// flag the database layer wants.
+//
+// Every entry below must be a server action, not a closure over one. A prop
+// crossing into a Client Component is serialized, and only a "use server"
+// function has anything to serialize — an id the browser can call back. A
+// plain arrow here has none, and React refuses to render the whole tree
+// ("Event handlers cannot be passed to Client Component props"), which is why
+// the wrappers that translate ViewKey carry the directive themselves.
+const isPersonal = (view: ViewKey) => view === "personal";
+
 const homeActions: HomeActions = {
-  onLoadData: getHomeData,
-  onCreateItem: createGroceryItem,
+  onLoadData: async (view) => {
+    "use server";
+    return getHomeData(isPersonal(view));
+  },
+  onCreateItem: async (name, view, categoryId) => {
+    "use server";
+    return createGroceryItem(name, isPersonal(view), categoryId);
+  },
   onSetBought: setGroceryBought,
   onDeleteItems: deleteItems,
   onRestoreItems: restoreItems,
   onUpdateItemCategory: updateGroceryCategory,
   onRenameItem: updateGroceryName,
   onDeleteCategory: deleteCategory,
-  onCreateCategory: createCategory,
+  onCreateCategory: async (name, view) => {
+    "use server";
+    return createCategory(name, isPersonal(view));
+  },
 };
 
 export default async function Page() {

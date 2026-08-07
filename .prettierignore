@@ -4,6 +4,10 @@ public/sw.js
 public/workbox-*.js
 public/swe-worker-*.js
 
+# Playwright run output.
+test-results/
+playwright-report/
+
 # Vendored agent content — upstream copies we consume, not code we style.
 .claude/skills/
 docs/engineering-principles.md

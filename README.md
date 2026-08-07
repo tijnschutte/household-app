@@ -39,3 +39,9 @@ bun run dev:local   # postgres in docker + migrations + the app
 The seed gives you a household "CD26" (join code `LOCALDEV1234`) with two members, **Tijn** and **Dirk**, both with password `password`. It fills the shared list with four categories of groceries — a couple already checked off — a personal list for Tijn, and a part-paid current month in Geld. To see the cross-device sync, log in as Tijn in one browser and Dirk in another; the list polls every 10 seconds.
 
 `bun run typecheck` and `bun run lint` run automatically on commit via husky.
+
+## Checks
+
+`bun run verify` is the fast gate: typecheck, lint, format, architecture, knip, unit tests. It runs in seconds and needs nothing running.
+
+`bun run e2e` is the slow one, and it exists for the failures `verify` structurally cannot see. None of those tools render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright makes a real request to a real production build and looks at what came back. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed: each spec creates the accounts it needs and deletes them afterwards.

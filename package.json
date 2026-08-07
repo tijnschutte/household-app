@@ -17,6 +17,7 @@
     "knip:ci": "knip --include dependencies,devDependencies,unlisted,binaries,unresolved",
     "test": "vitest",
     "test:run": "vitest run",
+    "e2e": "playwright test",
     "verify": "bun run typecheck && bun run lint:check && bun run format:check && bun run arch && bun run knip:ci && bun run test:run",
     "db:up": "docker compose up -d --wait db",
     "db:down": "docker compose down",
