@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "arch": "depcruise src middleware.ts --config .dependency-cruiser.cjs",
+    "arch": "depcruise src --config .dependency-cruiser.cjs",
     "knip": "knip",
     "knip:ci": "knip --include dependencies,devDependencies,unlisted,binaries,unresolved",
     "test": "vitest",
