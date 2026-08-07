@@ -99,28 +99,51 @@ The gates cannot see these, and this repo's shape makes them the likely bugs:
   logs; a failure the user needs to act on must surface in the UI, not only in
   the console.
 
-## On tests
+## Reviewing the tests
 
-**This repo has no test suite.** There is no vitest, no Playwright specs, and no
-test files anywhere — `@playwright/test` is installed but unused. So there is no
-red-green probe for you to run, and you must not invent one or report tests as
-passing.
+Tests run on Vitest with happy-dom and React Testing Library. They sit beside
+their source (`money.ts` / `money.test.ts`), and shared builders live in
+`tests/fixtures/`. Judge them as carefully as the code. Four questions:
 
-What to do instead: where the diff changes behaviour that could regress silently
-— money arithmetic in `geld/money.ts`, a scoping predicate, a zod schema — say
-so, and name the shape the test would take (a unit test beside the source for a
-pure function; a Playwright journey for a user-visible flow). Report the absence
-as a finding once, at the severity the change deserves. Do not repeat it per
-hunk, and do not treat every diff as needing a test.
+1. **Is the changed behaviour tested at all?**
+2. **Is it the right shape?** A pure function wants a unit test beside its
+   source. A `"use client"` component wants `render` plus `userEvent` and
+   assertions on what the user sees. An async Server Component cannot be
+   rendered by Testing Library at all — if the diff adds a test claiming to,
+   that test is not doing what it says.
+3. **Does it assert what a user observes**, or an implementation detail? Prefer
+   `getByRole`/`getByText` over class names and internal state. A component
+   tested by calling its helpers is not a component test.
+4. **Could it ever have failed?** This is the one you may verify by running.
+
+You may run a **red-green probe**: revert the source change, run the single new
+or changed test file, observe whether it fails, restore.
+
+```bash
+git stash push -- <source files, not the test files>
+bunx vitest run <the one test file>
+git stash pop
+```
+
+A test that passes with the fix removed proves nothing, and saying so is the
+most valuable finding you can make. Always `git stash pop`, including when the
+run errors. If you cannot restore the tree cleanly, say so loudly at the top of
+your report.
+
+Where the diff changes behaviour that could regress silently and has no test —
+money arithmetic, a scoping predicate, a zod schema — say so once, at the
+severity the change deserves. Do not repeat it per hunk, and do not treat every
+diff as needing a test.
 
 ## What to leave alone
 
 **Anything the tooling already enforces.** `bun run verify` has already run
-`typecheck`, `lint:check`, `format:check`, `arch` and `knip:ci` — you are
-invoked only after it passed. Never re-run any of them. Your Bash access exists
-for `git fetch`, `git diff` and `git log`. Formatting, unused variables, `any`,
-import-boundary violations, and unused exports or dependencies are all already
-caught; restating one wastes the reader's attention and trains them to skim you.
+`typecheck`, `lint:check`, `format:check`, `arch`, `knip:ci` and `test:run` —
+you are invoked only after it passed. Never re-run the suite or any linter. Your
+Bash access exists for `git fetch`, `git diff`, `git log` and the red-green
+probe above. Formatting, unused variables, `any`, import-boundary violations,
+and unused exports or dependencies are all already caught; restating one wastes
+the reader's attention and trains them to skim you.
 
 Your value is entirely in what a machine cannot check: whether an ownership
 check is really enforced, whether a contract is owned by the right consumer,

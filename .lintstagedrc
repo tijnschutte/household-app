@@ -1,4 +1,4 @@
 {
   "*": "prettier --ignore-unknown --write",
-  "*.{ts,tsx}": ["eslint --fix"]
+  "*.{ts,tsx}": ["eslint --fix", "vitest related --run"]
 }

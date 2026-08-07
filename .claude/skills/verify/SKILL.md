@@ -8,10 +8,10 @@ description: The automated gates for household-app, and how to run the app to ch
 ## The gates
 
 ```bash
-bun run verify     # typecheck -> lint:check -> format:check -> arch -> knip:ci
+bun run verify     # typecheck -> lint:check -> format:check -> arch -> knip:ci -> test:run
 ```
 
-Run this before claiming anything is done. The five gates are:
+Run this before claiming anything is done. The six gates are:
 
 | Gate           | Command                                  | Catches                                               |
 | -------------- | ---------------------------------------- | ----------------------------------------------------- |
@@ -20,6 +20,7 @@ Run this before claiming anything is done. The five gates are:
 | `format:check` | `prettier --check .`                     | formatting                                            |
 | `arch`         | `depcruise` vs `.dependency-cruiser.cjs` | import-boundary violations between app/components/lib |
 | `knip:ci`      | `knip`                                   | unused files, exports and dependencies                |
+| `test:run`     | `vitest run`                             | unit and component tests                              |
 
 `knip` is green as of the dependency cleanup that removed 15 unused packages.
 Read `knip.json` before adding an ignore — vendored shadcn and config-only
@@ -46,12 +47,38 @@ Auth is next-auth v5 with credentials, so a signed-out browser lands on
 `/sign-in`. Seeded users come from `src/lib/db/seed.ts` — read it for the
 credentials rather than guessing.
 
+## Writing tests
+
+Vitest with happy-dom and React Testing Library. Tests sit beside their source
+(`money.ts` / `money.test.ts`); shared builders live in `tests/fixtures/`.
+
+```bash
+bun run test            # watch
+bun run test:run        # once, as verify does
+bunx vitest run src/lib/geld/money.test.ts
+```
+
+`tests/setup.ts` handles the DOM matchers, unmounting the previous render, and
+the App Router hooks — a component that navigates gets a working `useRouter`,
+and a test asserts on it by importing `useRouter` from `next/navigation`.
+Nothing there stands in for our own code.
+
+Two limits. **Async Server Components cannot be rendered** by Testing Library,
+so `src/app/**/page.tsx` is out of reach — that is what Playwright is for.
+
+And a `"use client"` component that imports a server action directly pulls
+Prisma into the test process, so it cannot be rendered here at all. Most of
+them still do — `item-section.tsx`, `adjustments-section.tsx`, `beheer-sheet.tsx`,
+`add-category.tsx`, `household-info.tsx`, `sign-up-form.tsx`, `grocery-list.tsx`
+and `client-page.tsx`. The fix is to take the action as a prop from the server
+page, which is ordinary Next, and let the test pass a fake. Do that to the
+component you are touching rather than reaching for `vi.mock`.
+
 ## Checking a change by hand
 
-There is **no test suite** in this repo — no vitest, no Playwright specs.
-`@playwright/test` is installed but unused. So "the types pass" is not evidence
-that a user-visible change works: exercise the real flow in the browser, and say
-in your report which flow you drove and what you saw.
+A green suite is not evidence that a user-visible change works end to end.
+Exercise the real flow in the browser, and say in your report which flow you
+drove and what you saw.
 
 The UI is Dutch. Two tabs (`Huis`, `Geld`) plus a header button for household
 settings; mutations are server actions, so a change that "does nothing" in the

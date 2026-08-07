@@ -114,7 +114,14 @@ module.exports = {
     // them as leaves — matchable, but not walked into.
     doNotFollow: { path: "node_modules" },
     exclude: {
-      path: ["^(\\.next|public)/", "^\\.claude/", "^src/lib/db/migrations/"],
+      path: [
+        "^(\\.next|public)/",
+        "^\\.claude/",
+        "^src/lib/db/migrations/",
+        // Tests sit beside their source and import it directly; the layering
+        // rules describe the shipped graph, not the test graph.
+        "\\.test\\.tsx?$",
+      ],
     },
     tsConfig: { fileName: "tsconfig.json" },
     tsPreCompilationDeps: true,
