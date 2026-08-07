@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Settings } from "lucide-react";
-import { RecurringKind } from "@prisma/client";
+import { RECURRING_KIND, type RecurringKind } from "@/src/lib/geld/recurring-kind";
 import PageHeader from "@/src/components/page-header";
 import HuisButton from "@/src/components/huis-button";
 import { Button } from "@/src/components/ui/button";
@@ -66,7 +66,7 @@ export default function GeldPageClient({
       />
       <main className="flex w-full max-w-2xl mx-auto flex-1 flex-col overflow-y-auto px-4 pt-4 pb-8">
         {!hasItems ? (
-          <EmptyState onAdd={() => openBeheer(RecurringKind.CONTRIBUTION)} />
+          <EmptyState onAdd={() => openBeheer(RECURRING_KIND.CONTRIBUTION)} />
         ) : (
           <div className="space-y-6">
             <MonthNav month={month} />
@@ -75,7 +75,7 @@ export default function GeldPageClient({
               title="Inleg"
               items={data.contributions}
               month={month}
-              onAdd={() => openBeheer(RecurringKind.CONTRIBUTION)}
+              onAdd={() => openBeheer(RECURRING_KIND.CONTRIBUTION)}
               addLabel="Inleg toevoegen"
               onMarkPaid={actions.onMarkPaid}
               onUndoPaid={actions.onUndoPaid}
@@ -84,7 +84,7 @@ export default function GeldPageClient({
               title="Uitgaven"
               items={data.expenses}
               month={month}
-              onAdd={() => openBeheer(RecurringKind.EXPENSE)}
+              onAdd={() => openBeheer(RECURRING_KIND.EXPENSE)}
               addLabel="Uitgave toevoegen"
               onMarkPaid={actions.onMarkPaid}
               onUndoPaid={actions.onUndoPaid}

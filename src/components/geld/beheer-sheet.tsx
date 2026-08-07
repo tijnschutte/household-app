@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, CalendarOff } from "lucide-react";
-import { RecurringKind } from "@prisma/client";
+import { RECURRING_KIND, type RecurringKind } from "@/src/lib/geld/recurring-kind";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
@@ -454,7 +454,7 @@ export default function BeheerSheet({
 
       <ItemFormDialog
         editing={formItem ?? null}
-        defaultKind={autoAddKind ?? RecurringKind.CONTRIBUTION}
+        defaultKind={autoAddKind ?? RECURRING_KIND.CONTRIBUTION}
         open={formItem !== undefined}
         onOpenChange={(next) => !next && setFormItem(undefined)}
         onCreateItem={onCreateItem}
