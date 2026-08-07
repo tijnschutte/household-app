@@ -2,6 +2,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:local": "bun run db:up && bun run db:migrate && bun run dev",
+    "dev:fresh": "bun run db:up && bun run db:reset && bun run dev",
     "build": "next build",
     "postinstall": "prisma generate",
     "start": "next start",
@@ -16,9 +18,11 @@
     "test": "vitest",
     "test:run": "vitest run",
     "verify": "bun run typecheck && bun run lint:check && bun run format:check && bun run arch && bun run knip:ci && bun run test:run",
-    "db:up": "docker compose up -d db",
+    "db:up": "docker compose up -d --wait db",
+    "db:down": "docker compose down",
     "db:migrate": "bunx prisma migrate dev",
     "db:seed": "bunx prisma db seed",
+    "db:reset": "bunx prisma migrate reset --force",
     "db:studio": "bunx prisma studio",
     "prepare": "husky"
   },

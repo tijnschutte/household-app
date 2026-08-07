@@ -27,12 +27,15 @@ Next.js 15 (App Router) · React 19 · TypeScript · Prisma + PostgreSQL (Neon) 
 
 ## Running it locally
 
+Copy `.env.example` to `.env`, then:
+
 ```bash
 bun install
-bun run db:up      # postgres in docker
-bun run db:migrate  # apply schema
-bun run db:seed     # user "Tijn" / password "password"
-bun run dev
+bun run dev:local   # postgres in docker + migrations + the app
 ```
 
-Copy `.env.example` to `.env` first. `bun run typecheck` and `bun run lint` run automatically on commit via husky.
+`dev:local` keeps whatever is already in your database. `bun run dev:fresh` wipes it and reseeds instead — use that for a clean slate. The individual steps (`db:up`, `db:migrate`, `db:seed`, `db:reset`, `db:down`, `db:studio`) are still there if you want them one at a time.
+
+The seed gives you a household "CD26" (join code `LOCALDEV1234`) with two members, **Tijn** and **Dirk**, both with password `password`. It fills the shared list with four categories of groceries — a couple already checked off — a personal list for Tijn, and a part-paid current month in Geld. To see the cross-device sync, log in as Tijn in one browser and Dirk in another; the list polls every 10 seconds.
+
+`bun run typecheck` and `bun run lint` run automatically on commit via husky.

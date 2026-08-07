@@ -11,6 +11,13 @@ services:
       - "5432:5432"
     volumes:
       - mandje-pgdata:/var/lib/postgresql/data
+    # Lets `docker compose up --wait` block until the database accepts
+    # connections, so a migrate straight after `db:up` cannot race the boot.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mandje"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
 volumes:
   mandje-pgdata:
