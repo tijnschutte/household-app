@@ -1,6 +1,6 @@
 "use client";
 
-import { Grocery, Household } from "@prisma/client";
+import { Grocery } from "@prisma/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { User, House, Plus, Tag, Loader2 } from "lucide-react";
 import { Input } from "@/src/components/ui/input";
@@ -52,7 +52,12 @@ export type HomeActions = {
 type ViewKey = "household" | "personal";
 
 type HouseholdClientPageProps = {
-  household: Household;
+  /**
+   * Only the id: the full row carries `secret`, the household's join code, and
+   * a prop is serialized into the RSC payload whether the client reads it or
+   * not. Nothing on this screen displays it.
+   */
+  householdId: number;
   initialData: ViewData;
   actions: HomeActions;
 };
@@ -108,7 +113,7 @@ function ViewToggle({
 }
 
 export default function HouseholdClientPage({
-  household,
+  householdId,
   initialData,
   actions,
 }: HouseholdClientPageProps) {
@@ -286,7 +291,7 @@ export default function HouseholdClientPage({
       name: trimmedName,
       quantity: 1,
       bought: false,
-      householdId: showPersonal ? null : household.id,
+      householdId: showPersonal ? null : householdId,
       userId: null,
       categoryId: addCategory?.id ?? null,
       category: addCategory,

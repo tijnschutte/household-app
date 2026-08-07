@@ -39,6 +39,10 @@ export default async function Page() {
   const initialData = await getHomeData(false);
 
   return (
-    <HouseholdClientPage household={household} initialData={initialData} actions={homeActions} />
+    <HouseholdClientPage
+      householdId={household.id}
+      initialData={initialData}
+      actions={homeActions}
+    />
   );
 }

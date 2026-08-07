@@ -4,9 +4,8 @@ import userEvent from "@testing-library/user-event";
 import HouseholdClientPage, { type HomeActions } from "./client-page";
 import { aCategory, aGrocery, aViewData } from "@/tests/fixtures/house";
 import type { ViewData } from "@/src/lib/house/grocery-view";
-import type { Household } from "@prisma/client";
 
-const household: Household = { id: 1, name: "Familie Jansen", secret: "A1B2C3" };
+const householdId = 1;
 
 /**
  * A stand-in for the whole home-page action set. Each entry records what it was
@@ -63,7 +62,11 @@ function renderHome({
 }: { initialData?: ViewData } & Parameters<typeof fakeActions>[0] = {}) {
   const fake = fakeActions(options);
   render(
-    <HouseholdClientPage household={household} initialData={initialData} actions={fake.actions} />
+    <HouseholdClientPage
+      householdId={householdId}
+      initialData={initialData}
+      actions={fake.actions}
+    />
   );
   return fake;
 }
