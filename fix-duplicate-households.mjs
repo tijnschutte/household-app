@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -6,7 +6,7 @@ async function fixDuplicates() {
   try {
     // Get all households
     const households = await prisma.household.findMany({
-      orderBy: { id: 'asc' }
+      orderBy: { id: "asc" },
     });
 
     console.log(`Found ${households.length} households`);
@@ -22,17 +22,16 @@ async function fixDuplicates() {
 
         await prisma.household.update({
           where: { id: household.id },
-          data: { name: newName }
+          data: { name: newName },
         });
       } else {
         seenNames.add(household.name);
       }
     }
 
-    console.log('Done fixing duplicates!');
-
+    console.log("Done fixing duplicates!");
   } catch (error) {
-    console.error('Error fixing duplicates:', error);
+    console.error("Error fixing duplicates:", error);
   } finally {
     await prisma.$disconnect();
   }

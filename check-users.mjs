@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -8,10 +8,10 @@ async function main() {
       id: true,
       name: true,
       householdId: true,
-    }
+    },
   });
 
-  console.log('Users in database:');
+  console.log("Users in database:");
   console.log(JSON.stringify(users, null, 2));
 }
 

@@ -1,4 +1,4 @@
-import NextAuth from "next-auth"
+import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import db from "@/src/lib/db/db";
 import bcrypt from "bcryptjs";
@@ -54,10 +54,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         session.user = {
           ...session.user,
           id: token.id as string,
-          name: token.name as string
+          name: token.name as string,
         };
       }
       return session;
-    }
+    },
   },
 });
