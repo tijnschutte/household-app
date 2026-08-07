@@ -2,10 +2,6 @@
 <p align="center">A shared grocery list for households — built as a real app my household actually uses</p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Mandje running on an iPhone: categorized items, one checked off in place, and a clear-basket bar" width="320" />
-</p>
-
-<p align="center">
   <a href="https://household-app-seven.vercel.app">Live demo →</a>
 </p>
 
