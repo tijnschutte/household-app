@@ -20,6 +20,7 @@ Installable as a PWA; the target device is a phone in a shopping aisle, not a de
 - Join a household via a shareable code; members list on the info page
 - Real-time-ish sync across devices (polling)
 - Push notifications to your housemates' phones, switchable per person per topic
+- Optional tabs (currently Geld) that each person can switch off for themselves
 - Installable PWA with offline-capable service worker
 
 ## Stack

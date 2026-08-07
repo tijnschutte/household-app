@@ -17,6 +17,26 @@ model User {
   categories        Category[]
   pushSubscriptions PushSubscription[]
   notificationMutes NotificationMute[]
+  hiddenModules     HiddenModule[]
+}
+
+// A tab beside the shared list, which is the one module nobody can switch off.
+// Every value here must have an entry in OPTIONAL_MODULES and a route behind
+// it, or it is a switch that hides nothing.
+enum OptionalModule {
+  GELD
+}
+
+// A module a user has switched off. Same trade as NotificationMute: storing
+// the exceptions means a module added later appears for everyone without a
+// backfill, at the cost of arriving unasked for the people who don't want it.
+model HiddenModule {
+  id     Int            @id @default(autoincrement())
+  userId Int
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module OptionalModule
+
+  @@unique([userId, module])
 }
 
 // What a household member can be told about. Every value here must have a

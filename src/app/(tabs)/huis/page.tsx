@@ -8,7 +8,9 @@ import {
   registerDevice,
   setTopicMuted,
 } from "@/src/lib/notifications/actions";
+import { getHiddenModules, setModuleHidden } from "@/src/lib/modules/actions";
 import HouseholdInfo from "@/src/components/household-info";
+import ModuleSettings from "@/src/components/modules/module-settings";
 import NotificationSettings from "@/src/components/notifications/notification-settings";
 import PageHeader from "@/src/components/page-header";
 import SignOutButton from "@/src/components/auth/sign-out-button";
@@ -27,7 +29,7 @@ export default async function HuisPage() {
     redirect("/household-setup");
   }
 
-  const mutedTopics = await getMutedTopics();
+  const [mutedTopics, hiddenModules] = await Promise.all([getMutedTopics(), getHiddenModules()]);
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -44,6 +46,7 @@ export default async function HuisPage() {
           onForgetDevice={forgetDevice}
           onSetTopicMuted={setTopicMuted}
         />
+        <ModuleSettings hiddenModules={hiddenModules} onSetModuleHidden={setModuleHidden} />
       </main>
     </div>
   );

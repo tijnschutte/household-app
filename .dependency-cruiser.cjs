@@ -110,6 +110,18 @@ module.exports = {
       to: { path: "^src/lib/db/|node_modules/(next/|react(-dom)?/)" },
     },
     {
+      name: "module-catalogue-stays-client-safe",
+      comment:
+        "src/lib/modules/modules.ts must not import next or the db module. The bottom tab " +
+        "bar renders on every screen in the app and reads this file to decide which tabs " +
+        "exist, so a server-only import here lands Prisma in every bundle there is. " +
+        "(react is allowed, unlike the topics rule: a tab carries its icon, and an icon " +
+        "is a component. @prisma/client is `import type` only, which is erased.)",
+      severity: "error",
+      from: { path: "^src/lib/modules/modules\\.ts$" },
+      to: { path: "^src/lib/db/|node_modules/next/" },
+    },
+    {
       name: "push-delivery-stays-on-the-server",
       comment:
         "Only src/lib/ may import the push adapters. A screen that changes a notification " +
