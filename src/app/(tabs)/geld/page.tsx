@@ -3,7 +3,15 @@ import { redirect } from "next/navigation";
 import { getHouseholdById } from "@/src/lib/data";
 import { getGeldMonth, getRecurringItems } from "@/src/lib/geld/data";
 import { currentMonth, isValidMonth } from "@/src/lib/geld/money";
-import GeldPageClient from "@/src/components/geld/geld-page-client";
+import { markPaid, undoPaid } from "@/src/lib/geld/actions";
+import GeldPageClient, { type GeldActions } from "@/src/components/geld/geld-page-client";
+
+// The composition root for the Geld page: the only place that knows which
+// server action backs each operation the UI offers.
+const geldActions: GeldActions = {
+  onMarkPaid: markPaid,
+  onUndoPaid: undoPaid,
+};
 
 export default async function GeldPage({
   searchParams,
@@ -27,5 +35,12 @@ export default async function GeldPage({
 
   const [geldMonth, recurringItems] = await Promise.all([getGeldMonth(month), getRecurringItems()]);
 
-  return <GeldPageClient month={month} data={geldMonth} recurringItems={recurringItems} />;
+  return (
+    <GeldPageClient
+      month={month}
+      data={geldMonth}
+      recurringItems={recurringItems}
+      actions={geldActions}
+    />
+  );
 }

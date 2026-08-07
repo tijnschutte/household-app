@@ -26,20 +26,30 @@ import {
   AlertDialogTitle,
 } from "@/src/components/ui/alert-dialog";
 import { centsToInputValue, formatEuro, parseEuroToCents } from "@/src/lib/geld/money";
-import { markPaid, undoPaid } from "@/src/lib/geld/actions";
 import type { GeldItem } from "@/src/lib/geld/data";
+
+/**
+ * The two operations this section needs, owned here rather than imported from
+ * the action module: the server page passes the real server actions in, and a
+ * test passes a fake. Keeps Prisma out of anything that renders this.
+ */
+export type ItemSectionActions = {
+  onMarkPaid: (recurringItemId: number, month: string, amountCents: number) => Promise<unknown>;
+  onUndoPaid: (recurringItemId: number, month: string) => Promise<unknown>;
+};
 
 function MarkPaidDialog({
   item,
   month,
   open,
   onOpenChange,
+  onMarkPaid,
 }: {
   item: GeldItem;
   month: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+} & Pick<ItemSectionActions, "onMarkPaid">) {
   const router = useRouter();
   const [value, setValue] = useState(() => centsToInputValue(item.expectedCents));
   const [isSaving, setIsSaving] = useState(false);
@@ -58,7 +68,7 @@ function MarkPaidDialog({
     }
     setIsSaving(true);
     try {
-      await markPaid(item.id, month, cents);
+      await onMarkPaid(item.id, month, cents);
       toast.success(`${item.name} gemarkeerd als betaald`);
       onOpenChange(false);
       router.refresh();
@@ -105,7 +115,12 @@ function MarkPaidDialog({
   );
 }
 
-function ItemRow({ item, month }: { item: GeldItem; month: string }) {
+function ItemRow({
+  item,
+  month,
+  onMarkPaid,
+  onUndoPaid,
+}: { item: GeldItem; month: string } & ItemSectionActions) {
   const router = useRouter();
   const [markPaidOpen, setMarkPaidOpen] = useState(false);
   const [undoOpen, setUndoOpen] = useState(false);
@@ -114,7 +129,7 @@ function ItemRow({ item, month }: { item: GeldItem; month: string }) {
   const handleUndo = async () => {
     setIsUndoing(true);
     try {
-      await undoPaid(item.id, month);
+      await onUndoPaid(item.id, month);
       toast.success(`${item.name} weer op onbetaald gezet`);
       setUndoOpen(false);
       router.refresh();
@@ -160,6 +175,7 @@ function ItemRow({ item, month }: { item: GeldItem; month: string }) {
         month={month}
         open={markPaidOpen}
         onOpenChange={setMarkPaidOpen}
+        onMarkPaid={onMarkPaid}
       />
 
       <AlertDialog open={undoOpen} onOpenChange={(next) => !isUndoing && setUndoOpen(next)}>
@@ -193,13 +209,15 @@ export default function ItemSection({
   month,
   onAdd,
   addLabel,
+  onMarkPaid,
+  onUndoPaid,
 }: {
   title: string;
   items: GeldItem[];
   month: string;
   onAdd: () => void;
   addLabel: string;
-}) {
+} & ItemSectionActions) {
   return (
     <div>
       <div className="flex items-center justify-between px-1 pb-1.5">
@@ -221,7 +239,13 @@ export default function ItemSection({
       ) : (
         <div className="divide-y divide-border px-1">
           {items.map((item) => (
-            <ItemRow key={item.id} item={item} month={month} />
+            <ItemRow
+              key={item.id}
+              item={item}
+              month={month}
+              onMarkPaid={onMarkPaid}
+              onUndoPaid={onUndoPaid}
+            />
           ))}
         </div>
       )}

@@ -8,20 +8,30 @@ import HuisButton from "@/src/components/huis-button";
 import { Button } from "@/src/components/ui/button";
 import MonthNav from "@/src/components/geld/month-nav";
 import BalanceCard from "@/src/components/geld/balance-card";
-import ItemSection from "@/src/components/geld/item-section";
+import ItemSection, { type ItemSectionActions } from "@/src/components/geld/item-section";
 import AdjustmentsSection from "@/src/components/geld/adjustments-section";
 import BeheerSheet from "@/src/components/geld/beheer-sheet";
 import EmptyState from "@/src/components/geld/empty-state";
 import type { GeldMonth, RecurringItemRow } from "@/src/lib/geld/data";
 
+/**
+ * Everything the Geld page can do, handed down from the server page in one
+ * prop. Each section below owns its own narrow slice of this; collecting them
+ * here keeps the server/client boundary to a single prop instead of one per
+ * operation.
+ */
+export type GeldActions = ItemSectionActions;
+
 export default function GeldPageClient({
   month,
   data,
   recurringItems,
+  actions,
 }: {
   month: string;
   data: GeldMonth;
   recurringItems: RecurringItemRow[];
+  actions: GeldActions;
 }) {
   const [beheerOpen, setBeheerOpen] = useState(false);
   // Which kind the auto-opened add form starts on; null = just the sheet
@@ -65,6 +75,8 @@ export default function GeldPageClient({
               month={month}
               onAdd={() => openBeheer(RecurringKind.CONTRIBUTION)}
               addLabel="Inleg toevoegen"
+              onMarkPaid={actions.onMarkPaid}
+              onUndoPaid={actions.onUndoPaid}
             />
             <ItemSection
               title="Uitgaven"
@@ -72,6 +84,8 @@ export default function GeldPageClient({
               month={month}
               onAdd={() => openBeheer(RecurringKind.EXPENSE)}
               addLabel="Uitgave toevoegen"
+              onMarkPaid={actions.onMarkPaid}
+              onUndoPaid={actions.onUndoPaid}
             />
             <AdjustmentsSection month={month} adjustments={data.adjustments} />
           </div>
