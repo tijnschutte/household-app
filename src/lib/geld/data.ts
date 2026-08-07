@@ -1,6 +1,7 @@
 import prisma from "@/src/lib/db/db";
 import { requireUser } from "@/src/lib/session";
 import { RecurringKind } from "@prisma/client";
+import { summarizeMonth, EMPTY_MONTH_FIGURES } from "@/src/lib/geld/summary";
 
 export type GeldItem = {
   id: number;
@@ -54,13 +55,8 @@ export async function getGeldMonth(month: string): Promise<GeldMonth> {
       month,
       contributions: [],
       expenses: [],
-      paidIn: 0,
-      paidOut: 0,
       adjustments: [],
-      adjustmentSum: 0,
-      netto: 0,
-      unpaidCount: 0,
-      balanceCents: 0,
+      ...EMPTY_MONTH_FIGURES,
     };
   }
 
@@ -111,11 +107,6 @@ export async function getGeldMonth(month: string): Promise<GeldMonth> {
     .map(toGeldItem);
   const expenses = items.filter((item) => item.kind === RecurringKind.EXPENSE).map(toGeldItem);
 
-  const paidIn = contributionSum._sum.amountCents ?? 0;
-  const paidOut = expenseSum._sum.amountCents ?? 0;
-  const adjustmentSum = adjustments.reduce((sum, a) => sum + a.amountCents, 0);
-  const unpaidCount = items.filter((item) => item.entries.length === 0).length;
-
   // All-time balance: sum of every month's (contributions - expenses +
   // adjustments) for the household, not just this month.
   const [allTimeContribution, allTimeExpense] = await Promise.all([
@@ -128,23 +119,18 @@ export async function getGeldMonth(month: string): Promise<GeldMonth> {
       where: { recurringItem: { householdId, kind: RecurringKind.EXPENSE } },
     }),
   ]);
-  const balanceCents =
-    (allTimeContribution._sum.amountCents ?? 0) -
-    (allTimeExpense._sum.amountCents ?? 0) +
-    (adjustmentAllTimeSum._sum.amountCents ?? 0);
 
-  return {
-    month,
-    contributions,
-    expenses,
-    paidIn,
-    paidOut,
+  const figures = summarizeMonth({
+    paidInCents: contributionSum._sum.amountCents,
+    paidOutCents: expenseSum._sum.amountCents,
     adjustments,
-    adjustmentSum,
-    netto: paidIn - paidOut + adjustmentSum,
-    unpaidCount,
-    balanceCents,
-  };
+    items,
+    allTimeContributionCents: allTimeContribution._sum.amountCents,
+    allTimeExpenseCents: allTimeExpense._sum.amountCents,
+    allTimeAdjustmentCents: adjustmentAllTimeSum._sum.amountCents,
+  });
+
+  return { month, contributions, expenses, adjustments, ...figures };
 }
 
 export type RecurringItemRow = {

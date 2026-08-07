@@ -1,6 +1,7 @@
 "use client";
 
 import { Grocery, Category } from "@prisma/client";
+import { groupByCategory } from "@/src/lib/house/grocery-order";
 import { ShoppingCart, Trash2, Pencil, GripVertical, Check, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input";
@@ -589,26 +590,10 @@ export default function GroceryList({
     }
   };
 
-  // Checked items stay inside their own category group (WP-10): within a
-  // group, unchecked items come first (existing order), checked items sink
-  // below, most-recently-checked first. The header count is what's left to
-  // buy, so it's tracked separately from the (checked + unchecked) items
-  // that actually get rendered.
-  const sortGroup = (items: GroceryWithCategory[]) => {
-    const unchecked = items.filter((item) => !item.bought);
-    const checked = items
-      .filter((item) => item.bought)
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    return { items: [...unchecked, ...checked], uncheckedCount: unchecked.length };
-  };
-
-  const uncategorizedGroup = sortGroup(groceryList.filter((item) => !item.categoryId));
-  const categorizedItems = categories.map((category) => ({
-    category,
-    ...sortGroup(groceryList.filter((item) => item.categoryId === category.id)),
-  }));
-  // Don't filter out empty categories - show all categories (and a category
-  // that's fully checked isn't "empty" either — sortGroup keeps its items).
+  const { uncategorized: uncategorizedGroup, categorized: categorizedItems } = groupByCategory(
+    groceryList,
+    categories
+  );
 
   const isDragActive = activeDragId !== null;
   const activeItem = groceryList.find((item) => item.id === activeDragId);
