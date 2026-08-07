@@ -67,19 +67,18 @@ Two limits. **Async Server Components cannot be rendered** by Testing Library,
 so `src/app/**/page.tsx` is out of reach — that is what Playwright is for.
 
 And a `"use client"` component that imports a server action directly pulls
-Prisma into the test process, so it cannot be rendered here at all. Six still
-do: `beheer-sheet.tsx`, `add-category.tsx`, `household-info.tsx`,
-`auth/sign-up-form.tsx`, `(tabs)/home/client-page.tsx` and
-`household-setup/household-setup-client.tsx`.
+Prisma into the test process, so it cannot be rendered here at all. Five still
+do: `add-category.tsx`, `household-info.tsx`, `auth/sign-up-form.tsx`,
+`(tabs)/home/client-page.tsx` and `household-setup/household-setup-client.tsx`.
 
 The fix is to take the action as a prop from the server page, which is ordinary
 Next, and let the test pass a fake. Do that to the component you are touching
-rather than reaching for `vi.mock`. The Geld page is the worked example: each
-section exports the operations it needs (`ItemSectionActions`,
-`AdjustmentsSectionActions`), `geld-page-client.tsx` unions them into
-`GeldActions`, and `(tabs)/geld/page.tsx` is the single place that names the
-real server actions. `house/grocery-list.tsx` works the same way with plain
-`on*` callbacks.
+rather than reaching for `vi.mock`. The Geld route is the worked example and is
+fully converted: each part exports the operations it needs
+(`ItemSectionActions`, `AdjustmentsSectionActions`, `BeheerSheetActions`),
+`geld-page-client.tsx` unions them into `GeldActions`, and
+`(tabs)/geld/page.tsx` is the single place that names the real server actions.
+`house/grocery-list.tsx` works the same way with plain `on*` callbacks.
 
 ## Checking a change by hand
 

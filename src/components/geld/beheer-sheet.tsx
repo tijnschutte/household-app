@@ -40,13 +40,27 @@ import {
   formatMonthLabel,
   parseEuroToCents,
 } from "@/src/lib/geld/money";
-import {
-  createRecurringItem,
-  deleteRecurringItem,
-  endRecurringItem,
-  updateRecurringItem,
-} from "@/src/lib/geld/actions";
 import type { RecurringItemRow } from "@/src/lib/geld/data";
+
+/**
+ * The four operations this sheet needs, owned here rather than imported from
+ * the action module: the server page passes the real server actions in, and a
+ * test passes a fake. Keeps Prisma out of anything that renders this.
+ */
+export type BeheerSheetActions = {
+  onCreateItem: (
+    name: string,
+    kind: RecurringKind,
+    expectedCents: number,
+    activeFrom: string
+  ) => Promise<unknown>;
+  onUpdateItem: (
+    id: number,
+    updates: { name?: string; expectedCents?: number }
+  ) => Promise<unknown>;
+  onEndItem: (id: number, lastMonth: string) => Promise<unknown>;
+  onDeleteItem: (id: number) => Promise<unknown>;
+};
 
 const KIND_LABEL: Record<RecurringKind, string> = {
   CONTRIBUTION: "Inleg",
@@ -60,12 +74,14 @@ function ItemFormDialog({
   defaultKind,
   open,
   onOpenChange,
+  onCreateItem,
+  onUpdateItem,
 }: {
   editing: RecurringItemRow | null;
   defaultKind: RecurringKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+} & Pick<BeheerSheetActions, "onCreateItem" | "onUpdateItem">) {
   const router = useRouter();
   const isEdit = editing !== null;
   const [name, setName] = useState(editing?.name ?? "");
@@ -101,10 +117,10 @@ function ItemFormDialog({
     setIsSaving(true);
     try {
       if (isEdit) {
-        await updateRecurringItem(editing.id, { name: trimmedName, expectedCents: cents });
+        await onUpdateItem(editing.id, { name: trimmedName, expectedCents: cents });
         toast.success("Post bijgewerkt");
       } else {
-        await createRecurringItem(trimmedName, kind, cents, activeFrom);
+        await onCreateItem(trimmedName, kind, cents, activeFrom);
         toast.success("Post aangemaakt");
       }
       onOpenChange(false);
@@ -207,11 +223,12 @@ function EndItemDialog({
   item,
   open,
   onOpenChange,
+  onEndItem,
 }: {
   item: RecurringItemRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+} & Pick<BeheerSheetActions, "onEndItem">) {
   const router = useRouter();
   const [lastMonth, setLastMonth] = useState(currentMonth());
   const [isSaving, setIsSaving] = useState(false);
@@ -225,7 +242,7 @@ function EndItemDialog({
     if (!item) return;
     setIsSaving(true);
     try {
-      await endRecurringItem(item.id, lastMonth);
+      await onEndItem(item.id, lastMonth);
       toast.success(`${item.name} beëindigd`);
       onOpenChange(false);
       router.refresh();
@@ -279,11 +296,12 @@ function RecurringItemRowView({
   item,
   onEdit,
   onEnd,
+  onDeleteItem,
 }: {
   item: RecurringItemRow;
   onEdit: () => void;
   onEnd: () => void;
-}) {
+} & Pick<BeheerSheetActions, "onDeleteItem">) {
   const router = useRouter();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -292,7 +310,7 @@ function RecurringItemRowView({
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      await deleteRecurringItem(item.id);
+      await onDeleteItem(item.id);
       toast.success(`${item.name} verwijderd`);
       setConfirmDeleteOpen(false);
       router.refresh();
@@ -377,6 +395,10 @@ export default function BeheerSheet({
   onOpenChange,
   items,
   autoAddKind = null,
+  onCreateItem,
+  onUpdateItem,
+  onEndItem,
+  onDeleteItem,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -384,7 +406,7 @@ export default function BeheerSheet({
   /** When set, opens the "add" dialog with this kind preselected as soon as
       the sheet opens (section-header "+" and empty-state CTA). */
   autoAddKind?: RecurringKind | null;
-}) {
+} & BeheerSheetActions) {
   const [formItem, setFormItem] = useState<RecurringItemRow | null | undefined>(undefined);
   const [endItem, setEndItem] = useState<RecurringItemRow | null>(null);
 
@@ -414,6 +436,7 @@ export default function BeheerSheet({
                   item={item}
                   onEdit={() => setFormItem(item)}
                   onEnd={() => setEndItem(item)}
+                  onDeleteItem={onDeleteItem}
                 />
               ))}
             </div>
@@ -434,11 +457,14 @@ export default function BeheerSheet({
         defaultKind={autoAddKind ?? RecurringKind.CONTRIBUTION}
         open={formItem !== undefined}
         onOpenChange={(next) => !next && setFormItem(undefined)}
+        onCreateItem={onCreateItem}
+        onUpdateItem={onUpdateItem}
       />
       <EndItemDialog
         item={endItem}
         open={endItem !== null}
         onOpenChange={(next) => !next && setEndItem(null)}
+        onEndItem={onEndItem}
       />
     </Sheet>
   );

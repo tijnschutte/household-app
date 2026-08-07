@@ -12,7 +12,7 @@ import ItemSection, { type ItemSectionActions } from "@/src/components/geld/item
 import AdjustmentsSection, {
   type AdjustmentsSectionActions,
 } from "@/src/components/geld/adjustments-section";
-import BeheerSheet from "@/src/components/geld/beheer-sheet";
+import BeheerSheet, { type BeheerSheetActions } from "@/src/components/geld/beheer-sheet";
 import EmptyState from "@/src/components/geld/empty-state";
 import type { GeldMonth, RecurringItemRow } from "@/src/lib/geld/data";
 
@@ -22,7 +22,7 @@ import type { GeldMonth, RecurringItemRow } from "@/src/lib/geld/data";
  * here keeps the server/client boundary to a single prop instead of one per
  * operation.
  */
-export type GeldActions = ItemSectionActions & AdjustmentsSectionActions;
+export type GeldActions = ItemSectionActions & AdjustmentsSectionActions & BeheerSheetActions;
 
 export default function GeldPageClient({
   month,
@@ -104,6 +104,10 @@ export default function GeldPageClient({
         onOpenChange={setBeheerOpen}
         items={recurringItems}
         autoAddKind={beheerAddKind}
+        onCreateItem={actions.onCreateItem}
+        onUpdateItem={actions.onUpdateItem}
+        onEndItem={actions.onEndItem}
+        onDeleteItem={actions.onDeleteItem}
       />
     </div>
   );

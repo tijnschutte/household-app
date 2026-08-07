@@ -6,8 +6,21 @@
  * interesting number, and adding a field to GeldMonth does not touch every test.
  */
 
-import type { GeldMonth, GeldItem, GeldAdjustment } from "@/src/lib/geld/data";
+import type { GeldMonth, GeldItem, GeldAdjustment, RecurringItemRow } from "@/src/lib/geld/data";
 import { RecurringKind } from "@prisma/client";
+
+export function aRecurringItem(overrides: Partial<RecurringItemRow> = {}): RecurringItemRow {
+  return {
+    id: 1,
+    name: "Huur",
+    kind: RecurringKind.EXPENSE,
+    expectedCents: 100_000,
+    activeFrom: "2026-01",
+    activeTo: null,
+    hasEntries: false,
+    ...overrides,
+  };
+}
 
 export function aGeldItem(overrides: Partial<GeldItem> = {}): GeldItem {
   return {
