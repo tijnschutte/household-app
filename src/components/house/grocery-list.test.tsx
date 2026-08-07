@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import GroceryList from "./grocery-list";
@@ -19,23 +19,26 @@ function renderList(overrides: Partial<Props> = {}) {
   const addedTo: number[] = [];
   const busyRef = { current: false };
 
-  const view = render(
-    <GroceryList
-      groceryList={[]}
-      categories={[]}
-      isLoading={false}
-      onToggleBought={(id, bought) => toggled.push([id, bought])}
-      onDragEnd={() => {}}
-      onDeleteCategory={(id) => categoriesDeleted.push(id)}
-      onRenameItem={(id, name) => renamed.push([id, name])}
-      onAddToCategory={(id) => addedTo.push(id)}
-      onDeleteItem={(id) => itemsDeleted.push(id)}
-      busyRef={busyRef}
-      {...overrides}
-    />
-  );
+  const props: Props = {
+    groceryList: [],
+    categories: [],
+    isLoading: false,
+    onToggleBought: (id, bought) => toggled.push([id, bought]),
+    onDragEnd: () => {},
+    onDeleteCategory: (id) => categoriesDeleted.push(id),
+    onRenameItem: (id, name) => renamed.push([id, name]),
+    onAddToCategory: (id) => addedTo.push(id),
+    onDeleteItem: (id) => itemsDeleted.push(id),
+    busyRef,
+    ...overrides,
+  };
 
-  return { toggled, renamed, itemsDeleted, categoriesDeleted, addedTo, busyRef, ...view };
+  const view = render(<GroceryList {...props} />);
+
+  /** Re-renders with new props, the way a poll delivering fresh data would. */
+  const update = (next: Partial<Props> = {}) => view.rerender(<GroceryList {...props} {...next} />);
+
+  return { toggled, renamed, itemsDeleted, categoriesDeleted, addedTo, busyRef, update, ...view };
 }
 
 const zuivel = aCategory({ id: 7, name: "Zuivel" });
@@ -44,6 +47,9 @@ const header = (title: string) => screen.getByRole("heading", { name: new RegExp
 const deleteAction = () => screen.queryByRole("button", { name: "Verwijderen" });
 
 const POINTER = { pointerId: 1, isPrimary: true };
+
+/** How long dnd-kit keeps its capture-phase click suppressor alive after a drag. */
+const CLICK_SUPPRESSION_MS = 50;
 
 /**
  * One horizontal drag across a row, in the three events a touch device sends.
@@ -310,18 +316,31 @@ describe("GroceryList", () => {
       expect(list.toggled).toEqual([[1, true]]);
     });
 
-    it("leaves a gesture that starts on the drag handle to dnd-kit", async () => {
-      const { container } = renderList(oneItem);
+    it("stays open when fresh data arrives, so a poll cannot snap it shut", () => {
+      const list = renderList(oneItem);
+      swipeOpen(row());
 
-      const handle = container.querySelector("[data-drag-handle]");
-      swipeOpen(handle!);
+      list.update({ groceryList: [aGrocery({ id: 1, name: "melk" })] });
 
-      expect(deleteAction()).not.toBeInTheDocument();
+      expect(deleteAction()).toBeInTheDocument();
+      expect(row().closest("[data-row-body]")).toHaveStyle({ transform: "translateX(-96px)" });
+    });
 
-      // This gesture is far enough to trip dnd-kit's sensor, which suppresses
-      // clicks document-wide and only drops that listener 50ms after teardown.
-      // Waiting it out here keeps the next test from losing its first click.
-      await new Promise((resolve) => setTimeout(resolve, 60));
+    // Isolated because the gesture below trips dnd-kit's PointerSensor, which
+    // suppresses clicks document-wide and only drops that listener 50ms after
+    // teardown. The wait belongs to this test, not to whichever test happens
+    // to follow it — as an afterEach it still holds if the file is reordered
+    // or a single test is run on its own.
+    describe("when the gesture belongs to dnd-kit", () => {
+      afterEach(() => new Promise((resolve) => setTimeout(resolve, CLICK_SUPPRESSION_MS + 10)));
+
+      it("leaves a gesture that starts on the drag handle alone", () => {
+        const { container } = renderList(oneItem);
+
+        swipeOpen(container.querySelector("[data-drag-handle]")!);
+
+        expect(deleteAction()).not.toBeInTheDocument();
+      });
     });
   });
 

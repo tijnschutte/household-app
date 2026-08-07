@@ -23,6 +23,8 @@ import {
   closestCorners,
   useDraggable,
   useDroppable,
+  type SensorDescriptor,
+  type SensorOptions,
 } from "@dnd-kit/core";
 import { Button } from "../ui/button";
 import {
@@ -68,6 +70,11 @@ function CheckCircle({ bought }: { bought: boolean }) {
   );
 }
 
+// Until the client has mounted, DndContext is rendered without sensors: they
+// attach window/DOM listeners a server render must not. Module-level so the
+// identity is stable and dnd-kit doesn't re-register on every render.
+const NO_SENSORS: SensorDescriptor<SensorOptions>[] = [];
+
 // Width of the red "Verwijderen" action revealed by swiping a row left.
 const SWIPE_ACTION_WIDTH = 96;
 // A gesture must move this many px before we decide it's a swipe or a scroll.
@@ -104,7 +111,13 @@ function DraggableGroceryItem({
   // a horizontal swipe on the body can never start a drag). `touch-pan-y`
   // on the row keeps native vertical scrolling working: the browser handles
   // vertical pans itself and only lets horizontal movement reach us.
-  const [swipeX, setSwipeX] = useState(0);
+  // The live offset is a ref, not state: following a finger is ~90 pointermove
+  // events, and React only ever needs to know the two things below — whether a
+  // gesture is running, and whether it ended open. The pixels are written
+  // straight to the node, and re-applied after any render that would drop them.
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const offsetRef = useRef(0);
+  const [isOpen, setIsOpen] = useState(false);
   const [isSwiping, setIsSwiping] = useState(false);
   const swipeRef = useRef({
     startX: 0,
@@ -124,6 +137,23 @@ function DraggableGroceryItem({
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  // Safe to leave to the node between renders: `style` below never sets
+  // transform unless dnd-kit is dragging, and React only writes the style
+  // properties it manages — so a poll re-rendering the row leaves this alone.
+  const applyOffset = () => {
+    const node = rowRef.current;
+    // While dnd-kit is dragging, the transform is its own — never fight it.
+    if (!node || transform) return;
+    node.style.transform = offsetRef.current === 0 ? "" : `translateX(${offsetRef.current}px)`;
+  };
+
+  /** The single way a revealed row goes back to rest. */
+  const close = () => {
+    offsetRef.current = 0;
+    applyOffset();
+    setIsOpen(false);
+  };
 
   const startEditing = () => {
     setIsEditing(true);
@@ -163,7 +193,7 @@ function DraggableGroceryItem({
     const s = swipeRef.current;
     s.startX = e.clientX;
     s.startY = e.clientY;
-    s.baseX = swipeX;
+    s.baseX = offsetRef.current;
     s.pointerId = e.pointerId;
     s.mode = "pending";
   };
@@ -193,8 +223,8 @@ function DraggableGroceryItem({
     }
 
     // Track the finger: only leftward reveal, with a little overshoot room.
-    const next = Math.min(0, Math.max(-SWIPE_ACTION_WIDTH - 24, s.baseX + dx));
-    setSwipeX(next);
+    offsetRef.current = Math.min(0, Math.max(-SWIPE_ACTION_WIDTH - 24, s.baseX + dx));
+    applyOffset();
   };
 
   const settleSwipe = (e: React.PointerEvent) => {
@@ -202,9 +232,12 @@ function DraggableGroceryItem({
     if (e.pointerId !== s.pointerId) return;
     if (s.mode === "swiping") {
       justSwipedRef.current = true;
-      setIsSwiping(false);
       // Snap open when past half the action width, else snap back shut.
-      setSwipeX((x) => (x < -SWIPE_ACTION_WIDTH / 2 ? -SWIPE_ACTION_WIDTH : 0));
+      const open = offsetRef.current < -SWIPE_ACTION_WIDTH / 2;
+      offsetRef.current = open ? -SWIPE_ACTION_WIDTH : 0;
+      applyOffset();
+      setIsSwiping(false);
+      setIsOpen(open);
     }
     s.mode = "idle";
     s.pointerId = -1;
@@ -215,7 +248,7 @@ function DraggableGroceryItem({
     if (e.pointerId !== s.pointerId) return;
     if (s.mode === "swiping") {
       setIsSwiping(false);
-      setSwipeX(0);
+      close();
     }
     s.mode = "idle";
     s.pointerId = -1;
@@ -229,19 +262,17 @@ function DraggableGroceryItem({
       return;
     }
     // Tapping a row whose delete action is revealed closes it again.
-    if (swipeX !== 0) {
-      setSwipeX(0);
+    if (isOpen) {
+      close();
       return;
     }
     onToggleBought();
   };
 
   const style: React.CSSProperties = {
-    transform: transform
-      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-      : swipeX !== 0
-        ? `translateX(${swipeX}px)`
-        : undefined,
+    // Only dnd-kit's transform is set here; the swipe offset is written to the
+    // node by applyOffset, so following a finger costs no renders at all.
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition: isSwiping || isDragging ? undefined : "transform 150ms ease-out",
   };
 
@@ -270,19 +301,23 @@ function DraggableGroceryItem({
           stacking/paint of the translated row above it. */}
       <button
         onClick={() => {
-          setSwipeX(0);
+          close();
           onDelete();
         }}
-        tabIndex={swipeX === 0 ? -1 : 0}
-        aria-hidden={swipeX === 0}
+        tabIndex={isOpen ? 0 : -1}
+        aria-hidden={!isOpen}
         className={`absolute inset-y-0 right-0 w-24 bg-destructive text-destructive-foreground text-sm font-medium flex items-center justify-center ${
           isDragging ? "hidden" : ""
-        } ${swipeX === 0 && !isSwiping ? "invisible" : ""}`}
+        } ${!isOpen && !isSwiping ? "invisible" : ""}`}
       >
         Verwijderen
       </button>
       <div
-        ref={setNodeRef}
+        data-row-body
+        ref={(node) => {
+          rowRef.current = node;
+          setNodeRef(node);
+        }}
         style={style}
         onClick={handleRowClick}
         onPointerDown={handlePointerDown}
@@ -697,18 +732,15 @@ export default function GroceryList({
     return content;
   }
 
-  // The list content itself (rows, categories) must render in the server
-  // HTML so WP-2's fast first paint isn't wasted. Only the drag layer
-  // (DndContext + DragOverlay) is gated on mount — dnd-kit's sensors touch
-  // the DOM/window and can mismatch between server and client — so it's
-  // wrapped around the already-rendered `content` instead of replacing it.
-  if (!isMounted) {
-    return content;
-  }
-
+  // The list content must render in the server HTML so WP-2's fast first paint
+  // isn't wasted. What is gated on mount is only the parts that touch
+  // window/DOM — the sensors and the overlay — and never the element type of
+  // what we return: swapping the root from a div to DndContext between the
+  // first and second render is a type change, so React would throw the whole
+  // painted list away and rebuild it.
   return (
     <DndContext
-      sensors={sensors}
+      sensors={isMounted ? sensors : NO_SENSORS}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
