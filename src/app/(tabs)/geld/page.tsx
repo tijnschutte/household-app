@@ -1,6 +1,6 @@
 import { auth } from "@/src/lib/auth";
 import { redirect } from "next/navigation";
-import { getHouseholdById } from "@/src/lib/data";
+import { getCurrentHousehold } from "@/src/lib/data";
 import { getGeldMonth, getRecurringItems } from "@/src/lib/geld/data";
 import { currentMonth, isValidMonth } from "@/src/lib/geld/money";
 import {
@@ -39,7 +39,7 @@ export default async function GeldPage({
     redirect("/sign-in");
   }
 
-  const household = await getHouseholdById(Number(session.user.id));
+  const household = await getCurrentHousehold();
 
   if (!household) {
     redirect("/household-setup");

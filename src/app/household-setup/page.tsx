@@ -1,6 +1,6 @@
 import { auth } from "@/src/lib/auth";
 import { redirect } from "next/navigation";
-import { getHouseholdById } from "@/src/lib/data";
+import { getCurrentHousehold } from "@/src/lib/data";
 import { createHousehold, joinHousehold } from "@/src/lib/actions";
 import HouseholdSetupClient from "./household-setup-client";
 
@@ -11,7 +11,7 @@ export default async function HouseholdSetupPage() {
     redirect("/sign-in");
   }
 
-  const household = await getHouseholdById(Number(session.user.id));
+  const household = await getCurrentHousehold();
 
   if (household) {
     redirect("/home");

@@ -1,6 +1,6 @@
 import { auth } from "@/src/lib/auth";
 import { redirect } from "next/navigation";
-import { getHouseholdById } from "@/src/lib/data";
+import { getCurrentHousehold } from "@/src/lib/data";
 import { leaveHousehold } from "@/src/lib/actions";
 import HouseholdInfo from "@/src/components/household-info";
 import PageHeader from "@/src/components/page-header";
@@ -14,7 +14,7 @@ export default async function HuisPage() {
     redirect("/sign-in");
   }
 
-  const household = await getHouseholdById(Number(session.user.id));
+  const household = await getCurrentHousehold();
 
   if (!household) {
     redirect("/household-setup");

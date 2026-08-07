@@ -7,7 +7,17 @@ export type HouseholdWithMembers = Household & {
   members: { id: number; name: string }[];
 };
 
-export async function getHouseholdById(userId: number): Promise<HouseholdWithMembers | null> {
+/**
+ * The caller's own household, members included.
+ *
+ * The id comes from the session and never from an argument: `"use server"` at
+ * the top of this module publishes every export as a POST endpoint anyone can
+ * call, and the row returned here carries `secret` — the code needed to join
+ * the household. Taking the id as a parameter would hand that to any caller
+ * willing to guess an integer.
+ */
+export async function getCurrentHousehold(): Promise<HouseholdWithMembers | null> {
+  const { userId } = await requireUser();
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },

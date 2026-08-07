@@ -1,6 +1,4 @@
-"use server";
-
-import { getHouseholdById, getHomeData } from "@/src/lib/data";
+import { getCurrentHousehold, getHomeData } from "@/src/lib/data";
 import { redirect } from "next/navigation";
 import HouseholdClientPage, { type HomeActions } from "./client-page";
 import { auth } from "@/src/lib/auth";
@@ -34,7 +32,7 @@ export default async function Page() {
   if (!session?.user?.id) {
     redirect("/sign-in");
   }
-  const household = await getHouseholdById(Number(session.user?.id));
+  const household = await getCurrentHousehold();
   if (!household) {
     redirect("/household-setup");
   }
