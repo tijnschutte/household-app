@@ -9,7 +9,9 @@ import { Button } from "@/src/components/ui/button";
 import MonthNav from "@/src/components/geld/month-nav";
 import BalanceCard from "@/src/components/geld/balance-card";
 import ItemSection, { type ItemSectionActions } from "@/src/components/geld/item-section";
-import AdjustmentsSection from "@/src/components/geld/adjustments-section";
+import AdjustmentsSection, {
+  type AdjustmentsSectionActions,
+} from "@/src/components/geld/adjustments-section";
 import BeheerSheet from "@/src/components/geld/beheer-sheet";
 import EmptyState from "@/src/components/geld/empty-state";
 import type { GeldMonth, RecurringItemRow } from "@/src/lib/geld/data";
@@ -20,7 +22,7 @@ import type { GeldMonth, RecurringItemRow } from "@/src/lib/geld/data";
  * here keeps the server/client boundary to a single prop instead of one per
  * operation.
  */
-export type GeldActions = ItemSectionActions;
+export type GeldActions = ItemSectionActions & AdjustmentsSectionActions;
 
 export default function GeldPageClient({
   month,
@@ -87,7 +89,12 @@ export default function GeldPageClient({
               onMarkPaid={actions.onMarkPaid}
               onUndoPaid={actions.onUndoPaid}
             />
-            <AdjustmentsSection month={month} adjustments={data.adjustments} />
+            <AdjustmentsSection
+              month={month}
+              adjustments={data.adjustments}
+              onAddAdjustment={actions.onAddAdjustment}
+              onDeleteAdjustment={actions.onDeleteAdjustment}
+            />
           </div>
         )}
       </main>

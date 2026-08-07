@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getHouseholdById } from "@/src/lib/data";
 import { getGeldMonth, getRecurringItems } from "@/src/lib/geld/data";
 import { currentMonth, isValidMonth } from "@/src/lib/geld/money";
-import { markPaid, undoPaid } from "@/src/lib/geld/actions";
+import { addAdjustment, deleteAdjustment, markPaid, undoPaid } from "@/src/lib/geld/actions";
 import GeldPageClient, { type GeldActions } from "@/src/components/geld/geld-page-client";
 
 // The composition root for the Geld page: the only place that knows which
@@ -11,6 +11,8 @@ import GeldPageClient, { type GeldActions } from "@/src/components/geld/geld-pag
 const geldActions: GeldActions = {
   onMarkPaid: markPaid,
   onUndoPaid: undoPaid,
+  onAddAdjustment: addAdjustment,
+  onDeleteAdjustment: deleteAdjustment,
 };
 
 export default async function GeldPage({

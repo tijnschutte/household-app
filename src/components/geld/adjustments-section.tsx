@@ -26,28 +26,41 @@ import {
   AlertDialogTitle,
 } from "@/src/components/ui/alert-dialog";
 import { formatEuro, parseEuroToCents } from "@/src/lib/geld/money";
-import { addAdjustment, deleteAdjustment } from "@/src/lib/geld/actions";
 import type { GeldAdjustment } from "@/src/lib/geld/data";
+
+/**
+ * The two operations this section needs, owned here rather than imported from
+ * the action module: the server page passes the real server actions in, and a
+ * test passes a fake. Keeps Prisma out of anything that renders this.
+ */
+export type AdjustmentsSectionActions = {
+  onAddAdjustment: (month: string, amountCents: number, note?: string) => Promise<unknown>;
+  onDeleteAdjustment: (adjustmentId: number) => Promise<unknown>;
+};
 
 function AddAdjustmentDialog({
   month,
   open,
   onOpenChange,
+  onAddAdjustment,
 }: {
   month: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+} & Pick<AdjustmentsSectionActions, "onAddAdjustment">) {
   const router = useRouter();
   const [sign, setSign] = useState<1 | -1>(1);
   const [value, setValue] = useState("");
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const reset = () => {
+  // The single way out of this dialog. Cancelling, Escape, the overlay and a
+  // successful save all land here, so reopening never shows the last attempt.
+  const close = () => {
     setSign(1);
     setValue("");
     setNote("");
+    onOpenChange(false);
   };
 
   const handleConfirm = async () => {
@@ -58,10 +71,9 @@ function AddAdjustmentDialog({
     }
     setIsSaving(true);
     try {
-      await addAdjustment(month, cents * sign, note.trim() || undefined);
+      await onAddAdjustment(month, cents * sign, note.trim() || undefined);
       toast.success("Correctie toegevoegd");
-      reset();
-      onOpenChange(false);
+      close();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Toevoegen correctie mislukt");
@@ -74,10 +86,9 @@ function AddAdjustmentDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!isSaving) {
-          if (!next) reset();
-          onOpenChange(next);
-        }
+        if (isSaving) return;
+        if (next) onOpenChange(true);
+        else close();
       }}
     >
       <DialogContent>
@@ -138,7 +149,7 @@ function AddAdjustmentDialog({
           </div>
         </div>
         <DialogFooter className="gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+          <Button variant="outline" onClick={close} disabled={isSaving}>
             Annuleren
           </Button>
           <Button onClick={handleConfirm} disabled={isSaving}>
@@ -150,7 +161,10 @@ function AddAdjustmentDialog({
   );
 }
 
-function AdjustmentRow({ adjustment }: { adjustment: GeldAdjustment }) {
+function AdjustmentRow({
+  adjustment,
+  onDeleteAdjustment,
+}: { adjustment: GeldAdjustment } & Pick<AdjustmentsSectionActions, "onDeleteAdjustment">) {
   const router = useRouter();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -158,7 +172,7 @@ function AdjustmentRow({ adjustment }: { adjustment: GeldAdjustment }) {
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      await deleteAdjustment(adjustment.id);
+      await onDeleteAdjustment(adjustment.id);
       toast.success("Correctie verwijderd");
       setConfirmOpen(false);
       router.refresh();
@@ -222,10 +236,12 @@ function AdjustmentRow({ adjustment }: { adjustment: GeldAdjustment }) {
 export default function AdjustmentsSection({
   month,
   adjustments,
+  onAddAdjustment,
+  onDeleteAdjustment,
 }: {
   month: string;
   adjustments: GeldAdjustment[];
-}) {
+} & AdjustmentsSectionActions) {
   const [addOpen, setAddOpen] = useState(false);
 
   return (
@@ -249,11 +265,20 @@ export default function AdjustmentsSection({
       ) : (
         <div className="divide-y divide-border px-1">
           {adjustments.map((adjustment) => (
-            <AdjustmentRow key={adjustment.id} adjustment={adjustment} />
+            <AdjustmentRow
+              key={adjustment.id}
+              adjustment={adjustment}
+              onDeleteAdjustment={onDeleteAdjustment}
+            />
           ))}
         </div>
       )}
-      <AddAdjustmentDialog month={month} open={addOpen} onOpenChange={setAddOpen} />
+      <AddAdjustmentDialog
+        month={month}
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onAddAdjustment={onAddAdjustment}
+      />
     </div>
   );
 }
