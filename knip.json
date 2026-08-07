@@ -6,8 +6,6 @@
     // unused export here is not dead code. Deleting one makes the next `shadcn add`
     // re-add it and the diff noisy.
     "src/components/ui/**",
-    // One-off maintenance scripts, run by hand and not part of the build.
-    "*.mjs",
     // The browser loads the service worker by URL, so no module imports it.
     "public/sw.js",
     "public/workbox-*.js",
