@@ -67,62 +67,105 @@ const KIND_LABEL: Record<RecurringKind, string> = {
   EXPENSE: "Uitgave",
 };
 
-// Add (kind + from-month editable) and edit (name + amount only) share one
-// dialog, distinguished by whether `editing` is set.
-function ItemFormDialog({
-  editing,
+/**
+ * What both dialogs need before they can save. Returns the reason instead of
+ * toasting, so the caller decides how to say it — same shape as parseItemName.
+ */
+type ItemDraft = { ok: true; name: string; cents: number } | { ok: false; message: string };
+
+function parseItemDraft(name: string, amount: string): ItemDraft {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { ok: false, message: "Voer een naam in" };
+  }
+  const cents = parseEuroToCents(amount);
+  if (cents === null || cents <= 0) {
+    return { ok: false, message: "Voer een geldig bedrag in" };
+  }
+  return { ok: true, name: trimmed, cents };
+}
+
+/** The two fields both dialogs ask for, and the only two that editing changes. */
+function NameAndAmountFields({
+  name,
+  onNameChange,
+  amount,
+  onAmountChange,
+  disabled,
+}: {
+  name: string;
+  onNameChange: (value: string) => void;
+  amount: string;
+  onAmountChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="item-name">Naam</Label>
+        <Input
+          id="item-name"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="bijv. Ziggo"
+          maxLength={40}
+          disabled={disabled}
+          autoFocus
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="item-amount">Verwacht bedrag</Label>
+        <Input
+          id="item-amount"
+          inputMode="decimal"
+          placeholder="0,00"
+          value={amount}
+          onChange={(e) => onAmountChange(e.target.value)}
+          disabled={disabled}
+        />
+      </div>
+    </>
+  );
+}
+
+function AddItemDialog({
   defaultKind,
   open,
   onOpenChange,
   onCreateItem,
-  onUpdateItem,
 }: {
-  editing: RecurringItemRow | null;
   defaultKind: RecurringKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-} & Pick<BeheerSheetActions, "onCreateItem" | "onUpdateItem">) {
+} & Pick<BeheerSheetActions, "onCreateItem">) {
   const router = useRouter();
-  const isEdit = editing !== null;
-  const [name, setName] = useState(editing?.name ?? "");
-  const [kind, setKind] = useState<RecurringKind>(editing?.kind ?? defaultKind);
-  const [amount, setAmount] = useState(editing ? centsToInputValue(editing.expectedCents) : "");
-  const [activeFrom, setActiveFrom] = useState(editing?.activeFrom ?? currentMonth());
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<RecurringKind>(defaultKind);
+  const [amount, setAmount] = useState("");
+  const [activeFrom, setActiveFrom] = useState(currentMonth());
   const [isSaving, setIsSaving] = useState(false);
 
-  // Re-seed local state whenever the dialog is (re)opened for a (possibly
-  // different) item — the dialog stays mounted, so state wouldn't otherwise
-  // reset. This must be an effect on the controlled `open` prop: it changes
-  // programmatically, which does not fire Radix's onOpenChange.
+  // The dialog stays mounted and is opened by a controlled prop, which does not
+  // fire Radix's onOpenChange — so a fresh form has to be an effect on `open`.
   useEffect(() => {
     if (!open) return;
-    setName(editing?.name ?? "");
-    setKind(editing?.kind ?? defaultKind);
-    setAmount(editing ? centsToInputValue(editing.expectedCents) : "");
-    setActiveFrom(editing?.activeFrom ?? currentMonth());
-  }, [open, editing, defaultKind]);
+    setName("");
+    setKind(defaultKind);
+    setAmount("");
+    setActiveFrom(currentMonth());
+  }, [open, defaultKind]);
 
   const handleConfirm = async () => {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      toast.error("Voer een naam in");
-      return;
-    }
-    const cents = parseEuroToCents(amount);
-    if (cents === null || cents <= 0) {
-      toast.error("Voer een geldig bedrag in");
+    const draft = parseItemDraft(name, amount);
+    if (!draft.ok) {
+      toast.error(draft.message);
       return;
     }
 
     setIsSaving(true);
     try {
-      if (isEdit) {
-        await onUpdateItem(editing.id, { name: trimmedName, expectedCents: cents });
-        toast.success("Post bijgewerkt");
-      } else {
-        await onCreateItem(trimmedName, kind, cents, activeFrom);
-        toast.success("Post aangemaakt");
-      }
+      await onCreateItem(draft.name, kind, draft.cents, activeFrom);
+      toast.success("Post aangemaakt");
       onOpenChange(false);
       router.refresh();
     } catch (error) {
@@ -142,76 +185,136 @@ function ItemFormDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Post bewerken" : "Nieuwe post"}</DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Pas de naam of het verwachte bedrag aan."
-              : "Voeg een nieuwe vaste inleg of uitgave toe."}
-          </DialogDescription>
+          <DialogTitle>Nieuwe post</DialogTitle>
+          <DialogDescription>Voeg een nieuwe vaste inleg of uitgave toe.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          {!isEdit && (
-            <div className="space-y-2">
-              <Label>Soort</Label>
-              <div className="inline-flex rounded-lg border border-border p-0.5">
-                {(Object.keys(KIND_LABEL) as RecurringKind[]).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setKind(k)}
-                    disabled={isSaving}
-                    className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                      kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                    }`}
-                  >
-                    {KIND_LABEL[k]}
-                  </button>
-                ))}
-              </div>
+          <div className="space-y-2">
+            <Label>Soort</Label>
+            <div className="inline-flex rounded-lg border border-border p-0.5">
+              {(Object.keys(KIND_LABEL) as RecurringKind[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKind(k)}
+                  disabled={isSaving}
+                  className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                    kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {KIND_LABEL[k]}
+                </button>
+              ))}
             </div>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="item-name">Naam</Label>
-            <Input
-              id="item-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="bijv. Ziggo"
-              maxLength={40}
-              disabled={isSaving}
-              autoFocus
-            />
           </div>
+          <NameAndAmountFields
+            name={name}
+            onNameChange={setName}
+            amount={amount}
+            onAmountChange={setAmount}
+            disabled={isSaving}
+          />
           <div className="space-y-2">
-            <Label htmlFor="item-amount">Verwacht bedrag</Label>
+            <Label htmlFor="item-active-from">Actief vanaf</Label>
             <Input
-              id="item-amount"
-              inputMode="decimal"
-              placeholder="0,00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              id="item-active-from"
+              type="month"
+              value={activeFrom}
+              onChange={(e) => setActiveFrom(e.target.value)}
               disabled={isSaving}
             />
           </div>
-          {!isEdit && (
-            <div className="space-y-2">
-              <Label htmlFor="item-active-from">Actief vanaf</Label>
-              <Input
-                id="item-active-from"
-                type="month"
-                value={activeFrom}
-                onChange={(e) => setActiveFrom(e.target.value)}
-                disabled={isSaving}
-              />
-            </div>
-          )}
         </div>
         <DialogFooter className="gap-3">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Annuleren
           </Button>
           <Button onClick={handleConfirm} disabled={isSaving}>
-            {isSaving ? "Bezig..." : isEdit ? "Opslaan" : "Aanmaken"}
+            {isSaving ? "Bezig..." : "Aanmaken"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Editing deliberately offers less than adding: `kind` and `activeFrom` are
+ * what the item's history was recorded against, so changing them after the
+ * fact would rewrite months already settled. Ending an item is the way out.
+ */
+function EditItemDialog({
+  item,
+  open,
+  onOpenChange,
+  onUpdateItem,
+}: {
+  item: RecurringItemRow | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+} & Pick<BeheerSheetActions, "onUpdateItem">) {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Same programmatic-open caveat as the add dialog, plus this one is reused
+  // for a different item each time it opens.
+  useEffect(() => {
+    if (!open || !item) return;
+    setName(item.name);
+    setAmount(centsToInputValue(item.expectedCents));
+  }, [open, item]);
+
+  const handleConfirm = async () => {
+    if (!item) return;
+    const draft = parseItemDraft(name, amount);
+    if (!draft.ok) {
+      toast.error(draft.message);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onUpdateItem(item.id, { name: draft.name, expectedCents: draft.cents });
+      toast.success("Post bijgewerkt");
+      onOpenChange(false);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Opslaan mislukt");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (isSaving) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Post bewerken</DialogTitle>
+          <DialogDescription>Pas de naam of het verwachte bedrag aan.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <NameAndAmountFields
+            name={name}
+            onNameChange={setName}
+            amount={amount}
+            onAmountChange={setAmount}
+            disabled={isSaving}
+          />
+        </div>
+        <DialogFooter className="gap-3">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+            Annuleren
+          </Button>
+          <Button onClick={handleConfirm} disabled={isSaving}>
+            {isSaving ? "Bezig..." : "Opslaan"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -407,15 +510,14 @@ export default function BeheerSheet({
       the sheet opens (section-header "+" and empty-state CTA). */
   autoAddKind?: RecurringKind | null;
 } & BeheerSheetActions) {
-  const [formItem, setFormItem] = useState<RecurringItemRow | null | undefined>(undefined);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editItem, setEditItem] = useState<RecurringItemRow | null>(null);
   const [endItem, setEndItem] = useState<RecurringItemRow | null>(null);
-
-  const openAdd = () => setFormItem(null);
 
   // The sheet opens programmatically (controlled `open`), so the auto-opened
   // add dialog can't hang off onOpenChange.
   useEffect(() => {
-    if (open && autoAddKind) setFormItem(null);
+    if (open && autoAddKind) setAddOpen(true);
   }, [open, autoAddKind]);
 
   return (
@@ -434,7 +536,7 @@ export default function BeheerSheet({
                 <RecurringItemRowView
                   key={item.id}
                   item={item}
-                  onEdit={() => setFormItem(item)}
+                  onEdit={() => setEditItem(item)}
                   onEnd={() => setEndItem(item)}
                   onDeleteItem={onDeleteItem}
                 />
@@ -443,7 +545,7 @@ export default function BeheerSheet({
           )}
           <Button
             variant="ghost"
-            onClick={openAdd}
+            onClick={() => setAddOpen(true)}
             className="mt-2 h-11 w-full justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-normal text-muted-foreground hover:text-foreground"
           >
             <Plus className="h-4 w-4" />
@@ -452,12 +554,16 @@ export default function BeheerSheet({
         </div>
       </SheetContent>
 
-      <ItemFormDialog
-        editing={formItem ?? null}
+      <AddItemDialog
         defaultKind={autoAddKind ?? RECURRING_KIND.CONTRIBUTION}
-        open={formItem !== undefined}
-        onOpenChange={(next) => !next && setFormItem(undefined)}
+        open={addOpen}
+        onOpenChange={setAddOpen}
         onCreateItem={onCreateItem}
+      />
+      <EditItemDialog
+        item={editItem}
+        open={editItem !== null}
+        onOpenChange={(next) => !next && setEditItem(null)}
         onUpdateItem={onUpdateItem}
       />
       <EndItemDialog
