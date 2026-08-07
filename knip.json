@@ -9,8 +9,13 @@
     // The browser loads the service worker by URL, so no module imports it.
     "public/sw.js",
     "public/workbox-*.js",
-    "public/swe-worker-*.js"
+    "public/swe-worker-*.js",
+    "public/worker-*.js"
   ],
+
+  // next-pwa compiles worker/ into the service worker by path, not by import,
+  // so nothing in the module graph reaches it.
+  "entry": ["worker/index.ts"],
 
   "ignoreDependencies": [
     // Consumed by config, not by an import: eslint.config.mjs extends

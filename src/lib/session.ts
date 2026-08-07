@@ -14,6 +14,8 @@ import db from "@/src/lib/db/db";
 export const requireUser = cache(
   async (): Promise<{
     userId: number;
+    /** Who the household sees in a notification about what this caller did. */
+    name: string;
     householdId: number | null;
   }> => {
     const session = await auth();
@@ -24,13 +26,13 @@ export const requireUser = cache(
     const userId = Number(session.user.id);
     const user = await db.user.findUnique({
       where: { id: userId },
-      select: { householdId: true },
+      select: { name: true, householdId: true },
     });
 
     if (!user) {
       throw new Error("Niet ingelogd");
     }
 
-    return { userId, householdId: user.householdId };
+    return { userId, name: user.name, householdId: user.householdId };
   }
 );

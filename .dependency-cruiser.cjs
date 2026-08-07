@@ -97,6 +97,30 @@ module.exports = {
       to: { path: "^src/lib/db/|node_modules/(@prisma/|prisma/|next/|react(-dom)?/)" },
     },
     {
+      name: "notification-topics-stay-client-safe",
+      comment:
+        "src/lib/notifications/topics.ts must not import next, react or the db module. It " +
+        "is both the catalogue the settings screen renders and the copy the push carries, " +
+        "so it is imported by a client component; a server-only import here drags Prisma's " +
+        "runtime into that bundle. (@prisma/client is absent from this list on purpose: the " +
+        "one import of it is `import type`, which is erased, and dependency-cruiser cannot " +
+        "tell the two apart.)",
+      severity: "error",
+      from: { path: "^src/lib/notifications/topics\\.ts$" },
+      to: { path: "^src/lib/db/|node_modules/(next/|react(-dom)?/)" },
+    },
+    {
+      name: "push-delivery-stays-on-the-server",
+      comment:
+        "Only src/lib/ may import the push adapters. A screen that changes a notification " +
+        "setting takes a server action as a prop, like every other mutation in this app — " +
+        "importing the sender pulls the web-push library, and the code path that reads the " +
+        "VAPID private key, into the browser bundle.",
+      severity: "error",
+      from: { path: "^src/(app|components)/" },
+      to: { path: "^src/lib/notifications/(notify|push-sender|audience)\\.ts$" },
+    },
+    {
       name: "money-is-pure",
       comment:
         "src/lib/geld/money.ts must not import prisma, next or react. Its own header " +

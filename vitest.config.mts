@@ -9,6 +9,10 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     // e2e/ is Playwright's; it drives a real browser and must not be collected here.
     exclude: ["node_modules/**", ".next/**", "e2e/**", ".claude/**"],
+    // Next inlines NEXT_PUBLIC_* at build time; under vitest the module reads
+    // it at import, so the notification settings need a value to consider push
+    // configured at all.
+    env: { NEXT_PUBLIC_VAPID_PUBLIC_KEY: "a-test-vapid-key" },
   },
   resolve: {
     // Mirrors the "@/*" -> repo root alias in tsconfig.json, so a test imports a

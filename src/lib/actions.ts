@@ -5,6 +5,9 @@ import { schema, groceryItemSchema, categorySchema } from "@/src/lib/schema";
 import db from "@/src/lib/db/db";
 import { executeAction } from "@/src/lib/executeAction";
 import { requireUser } from "@/src/lib/session";
+import { notifyHousehold } from "@/src/lib/notifications/notify";
+import { groceryAdded, memberJoined } from "@/src/lib/notifications/topics";
+import { after } from "next/server";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -40,7 +43,7 @@ export async function createGroceryItem(
   categoryId?: number | null
 ) {
   try {
-    const { userId, householdId } = await requireUser();
+    const { userId, name: actorName, householdId } = await requireUser();
 
     if (!personal && !householdId) {
       throw new Error("Je bent niet lid van een huishouden");
@@ -69,6 +72,20 @@ export async function createGroceryItem(
         ? { name: itemName, userId, householdId: null, categoryId: targetCategoryId }
         : { name: itemName, householdId, userId: null, categoryId: targetCategoryId },
     });
+
+    // Nobody to tell about a personal list. `after` runs this once the
+    // response is on its way, so the push service's latency never lands on
+    // the person waiting for their item to appear.
+    if (!personal && householdId != null) {
+      after(() =>
+        notifyHousehold({
+          householdId,
+          actorUserId: userId,
+          notification: groceryAdded(actorName, itemName),
+        })
+      );
+    }
+
     return groceryItem;
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -232,7 +249,7 @@ export const createHousehold = async (formData: FormData) => {
 export const joinHousehold = async (formData: FormData) => {
   return executeAction({
     actionFn: async () => {
-      const { userId, householdId } = await requireUser();
+      const { userId, name: actorName, householdId } = await requireUser();
       if (householdId != null) {
         throw new Error("Je zit al in een huishouden");
       }
@@ -255,6 +272,14 @@ export const joinHousehold = async (formData: FormData) => {
         where: { id: userId },
         data: { householdId: household.id },
       });
+
+      after(() =>
+        notifyHousehold({
+          householdId: household.id,
+          actorUserId: userId,
+          notification: memberJoined(actorName, household.name),
+        })
+      );
 
       return household;
     },

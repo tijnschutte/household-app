@@ -19,6 +19,7 @@ Installable as a PWA; the target device is a phone in a shopping aisle, not a de
 - Quick-add with a sticky "add to this category" picker
 - Join a household via a shareable code; members list on the info page
 - Real-time-ish sync across devices (polling)
+- Push notifications to your housemates' phones, switchable per person per topic
 - Installable PWA with offline-capable service worker
 
 ## Stack
@@ -45,3 +46,42 @@ The seed gives you a household "CD26" (join code `LOCALDEV1234`) with two member
 `bun run verify` is the fast gate: typecheck, lint, format, architecture, knip, unit tests. It runs in seconds and needs nothing running.
 
 `bun run e2e` is the slow one, and it exists for the failures `verify` structurally cannot see. None of those tools render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright makes a real request to a real production build and looks at what came back. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed: each spec creates the accounts it needs and deletes them afterwards.
+
+## Notifications
+
+Adding something to the shared list, or joining a household, pushes a notification to
+the other members — Web Push, so it reaches a phone with the app closed. Each person
+picks which topics they want on the Huis page; the choice follows the person across
+their devices, while granting permission is per device.
+
+Two things to know:
+
+- **iOS only delivers Web Push to an installed PWA.** In Safari-as-a-browser the switch
+  is disabled and says to add Mandje to the home screen first.
+- **The service worker is disabled in `next dev`**, so notifications cannot be tested
+  with `bun run dev`. Use `bun run build && AUTH_TRUST_HOST=true bun run start`
+  (NextAuth needs that variable outside Vercel).
+
+Set the keys before any of this works — without them notifications are simply off, and
+the server says so once at startup:
+
+```bash
+bunx web-push generate-vapid-keys   # then fill in the VAPID_* vars from .env.example
+```
+
+### Which pair goes where
+
+Production and Preview share one pair, because they share one database: a subscription
+made on a preview URL lands in the same table production pushes from, and a subscription
+can only be pushed to with the key it was created against. Local dev uses its own pair —
+it talks to the docker database, and a key on a laptop should not be able to reach a real
+phone. Vercel's "Development" scope is deliberately left unset, so `vercel env pull`
+cannot quietly arm a checkout with production push credentials.
+
+Rotating the pair silently breaks every existing subscription: the push service answers
+403, which is **not** treated as a dead device — a 401/403 is far more often our own
+misconfiguration (a wrong key deployed, a skewed clock invalidating the VAPID JWT), and
+deleting every household's subscriptions over that is not something anyone can undo.
+Recovery happens on the client instead: the settings screen compares the key a
+subscription was made with against the key in use, and trades in a stale one. So after a
+rotation, each member starts receiving again the next time they open the Huis page.

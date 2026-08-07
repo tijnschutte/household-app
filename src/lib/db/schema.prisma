@@ -8,13 +8,49 @@ datasource db {
 }
 
 model User {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
-  password    String
-  householdId Int?
-  household   Household? @relation(fields: [householdId], references: [id])
-  groceries   Grocery[]
-  categories  Category[]
+  id                Int                @id @default(autoincrement())
+  name              String             @unique
+  password          String
+  householdId       Int?
+  household         Household?         @relation(fields: [householdId], references: [id])
+  groceries         Grocery[]
+  categories        Category[]
+  pushSubscriptions PushSubscription[]
+  notificationMutes NotificationMute[]
+}
+
+// What a household member can be told about. Every value here must have a
+// call site that raises it and an entry in NOTIFICATION_TOPICS, or the topic
+// is an unreachable row in the settings screen.
+enum NotificationTopic {
+  GROCERY_ADDED
+  MEMBER_JOINED
+}
+
+// One row per device that has granted notification permission — a user signed
+// in on a phone and a laptop has two. `endpoint` is the push service's URL for
+// that device and is globally unique, so re-subscribing the same device
+// updates the keys instead of accumulating rows.
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}
+
+// A topic a user has switched off. Storing the exceptions rather than the
+// choices means a topic added later reaches everyone without a backfill:
+// no row is the default, and the default is "yes, tell me".
+model NotificationMute {
+  id     Int               @id @default(autoincrement())
+  userId Int
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic  NotificationTopic
+
+  @@unique([userId, topic])
 }
 
 model Household {

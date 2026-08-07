@@ -1,0 +1,20 @@
+{
+  // The worker is the one place in this repo that is not a page: `lib.dom` and
+  // `lib.webworker` declare the same names with different types, so they
+  // cannot share a program. The root tsconfig excludes this directory and
+  // `bun run typecheck` runs this project too, so the worker stays checked.
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["esnext", "webworker"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": [],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "baseUrl": "..",
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["*.ts"]
+}

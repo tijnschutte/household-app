@@ -31,5 +31,7 @@
     "src/lib/lib/placeholder-data.ts",
     "scripts/seed.js"
   ],
-  "exclude": ["node_modules"]
+  // worker/ has its own project: it runs in a service worker, where lib.dom's
+  // declarations are the wrong ones. `bun run typecheck` checks both.
+  "exclude": ["node_modules", "worker"]
 }

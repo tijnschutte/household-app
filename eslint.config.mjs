@@ -30,6 +30,8 @@ const eslintConfig = [
       "public/sw.js",
       "public/workbox-*.js",
       "public/swe-worker-*.js",
+      // The compiled form of worker/index.ts, which is linted at its source.
+      "public/worker-*.js",
     ],
   },
 ];
