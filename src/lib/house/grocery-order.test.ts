@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { sortGroup, groupByCategory } from "./grocery-order";
+import {
+  sortGroup,
+  groupByCategory,
+  resolveDropCategory,
+  categoryDropId,
+  UNCATEGORIZED_DROP_ID,
+} from "./grocery-order";
 
 type TestItem = {
   name: string;
@@ -148,5 +154,32 @@ describe("groupByCategory", () => {
     const { categorized } = groupByCategory([], [brood, zuivel]);
 
     expect(categorized.map((g) => g.category.name)).toEqual(["Brood", "Zuivel"]);
+  });
+});
+
+describe("resolveDropCategory", () => {
+  const items = [
+    { id: 10, categoryId: 1 },
+    { id: 11, categoryId: null },
+  ];
+
+  it("files the item under the category whose zone it was dropped on", () => {
+    expect(resolveDropCategory(categoryDropId(7), items)).toBe(7);
+  });
+
+  it("takes the category off an item dropped on the uncategorized zone", () => {
+    expect(resolveDropCategory(UNCATEGORIZED_DROP_ID, items)).toBeNull();
+  });
+
+  it("files the item where the item it was dropped on lives", () => {
+    expect(resolveDropCategory("10", items)).toBe(1);
+  });
+
+  it("uncategorizes an item dropped on an uncategorized item", () => {
+    expect(resolveDropCategory("11", items)).toBeNull();
+  });
+
+  it("uncategorizes rather than guessing when the target is gone", () => {
+    expect(resolveDropCategory("999", items)).toBeNull();
   });
 });

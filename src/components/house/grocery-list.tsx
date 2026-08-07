@@ -1,8 +1,13 @@
 "use client";
 
 import { Category } from "@prisma/client";
-import { groupByCategory } from "@/src/lib/house/grocery-order";
-import type { GroceryWithCategory } from "@/src/lib/house/grocery-view";
+import {
+  groupByCategory,
+  resolveDropCategory,
+  categoryDropId,
+  UNCATEGORIZED_DROP_ID,
+} from "@/src/lib/house/grocery-order";
+import { MAX_ITEM_NAME_LENGTH, type GroceryWithCategory } from "@/src/lib/house/grocery-view";
 import { ShoppingCart, Trash2, Pencil, GripVertical, Check, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input";
@@ -131,7 +136,9 @@ function DraggableGroceryItem({
   };
 
   const handleSave = () => {
-    const trimmed = editValue.trim().slice(0, 30);
+    // Length is the input's job (maxLength) and normalization the caller's, so
+    // all that is decided here is whether there is a change worth saving.
+    const trimmed = editValue.trim();
     if (trimmed && trimmed !== item.name) {
       onRename(trimmed);
     } else {
@@ -248,7 +255,7 @@ function DraggableGroceryItem({
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={handleSave}
           onKeyDown={handleKeyDown}
-          maxLength={30}
+          maxLength={MAX_ITEM_NAME_LENGTH}
           className="h-7 text-base border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
         />
       </div>
@@ -306,6 +313,7 @@ function DraggableGroceryItem({
               e.stopPropagation();
               startEditing();
             }}
+            aria-label={`${item.name} hernoemen`}
             className="h-11 w-11 -my-2 flex items-center justify-center hover:bg-gray-100 rounded shrink-0"
           >
             <Pencil className="w-3.5 h-3.5 text-gray-400" />
@@ -343,7 +351,7 @@ function UncategorizedItems({
   onDeleteItem: (groceryId: number) => void;
   onItemEditingChange?: (id: number, editing: boolean) => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: "uncategorized" });
+  const { setNodeRef, isOver } = useDroppable({ id: UNCATEGORIZED_DROP_ID });
 
   // Empty (no items at all, checked or unchecked) and only visible because a
   // drag is in progress: a thin labeled drop line, not a tall empty box. A
@@ -555,27 +563,7 @@ export default function GroceryList({
 
     if (!over) return;
 
-    const groceryId = active.id as number;
-    let categoryId: number | null = null;
-
-    const overId = over.id.toString();
-
-    if (overId === "uncategorized") {
-      // Dropped on uncategorized zone
-      categoryId = null;
-    } else if (overId.startsWith("category-")) {
-      // Dropped on a category container
-      categoryId = parseInt(overId.replace("category-", ""));
-    } else {
-      // Dropped on another grocery item - find its category
-      const targetItemId = parseInt(overId);
-      const targetItem = groceryList.find((item) => item.id === targetItemId);
-      if (targetItem) {
-        categoryId = targetItem.categoryId;
-      }
-    }
-
-    onDragEnd(groceryId, categoryId);
+    onDragEnd(active.id as number, resolveDropCategory(over.id.toString(), groceryList));
   };
 
   // A non-empty category asks for confirmation first; an empty one (counting
@@ -625,7 +613,7 @@ export default function GroceryList({
             categorizedItems.map(({ category, items, uncheckedCount }) => (
               <DroppableCategory
                 key={category.id}
-                id={`category-${category.id}`}
+                id={categoryDropId(category.id)}
                 title={category.name}
                 items={items}
                 uncheckedCount={uncheckedCount}

@@ -10,6 +10,7 @@ import {
   appendCategory,
   appendItem,
   isOptimistic,
+  MAX_ITEM_NAME_LENGTH,
   moveItemToCategory,
   parseItemName,
   removeCategory,
@@ -399,9 +400,14 @@ export default function HouseholdClientPage({
   };
 
   const handleRenameItem = async (groceryId: number, newName: string) => {
-    // Mirror the server's normalization so the local cache matches what the
-    // next poll will return.
-    const normalized = newName.trim().toLowerCase();
+    // Same rule as the add bar: one definition of what an item may be called,
+    // and the normalization it mirrors from the server.
+    const parsed = parseItemName(newName);
+    if (!parsed.ok) {
+      toast.error(parsed.message);
+      return;
+    }
+    const normalized = parsed.name;
     try {
       await actions.onRenameItem(groceryId, normalized);
       updateView(viewKey, (data) => renameItemIn(data, groceryId, normalized));
@@ -552,7 +558,7 @@ export default function HouseholdClientPage({
               className="flex-1 min-w-0 h-full border-0 shadow-none bg-transparent px-2 text-base focus-visible:ring-0 focus-visible:ring-offset-0"
               placeholder="Voeg een item toe..."
               value={itemName}
-              maxLength={30}
+              maxLength={MAX_ITEM_NAME_LENGTH}
               onChange={(e) => setItemName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {

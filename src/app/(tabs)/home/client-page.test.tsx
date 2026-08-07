@@ -186,6 +186,32 @@ describe("HouseholdClientPage", () => {
     });
   });
 
+  describe("renaming an item", () => {
+    const rename = async (from: string, to: string) => {
+      await userEvent.click(screen.getByRole("button", { name: `${from} hernoemen` }));
+      // The add bar is a textbox too; the editor is the one holding the old name.
+      const input = screen.getByDisplayValue(from);
+      await userEvent.clear(input);
+      await userEvent.type(input, `${to}{Enter}`);
+    };
+
+    it("lowercases the new name, so duplicates collapse however it was typed", async () => {
+      const fake = renderHome();
+
+      await rename("melk", "Halfvolle Melk");
+
+      expect(fake.renamed).toEqual([[1, "halfvolle melk"]]);
+    });
+
+    it("shows the new name straight away, before the server has answered", async () => {
+      renderHome();
+
+      await rename("melk", "karnemelk");
+
+      expect(screen.getByText("karnemelk")).toBeInTheDocument();
+    });
+  });
+
   describe("the two lists", () => {
     it("loads the personal list the first time it is opened", async () => {
       const fake = renderHome({
