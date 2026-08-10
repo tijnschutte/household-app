@@ -127,6 +127,10 @@ export default function HouseholdClientPage({
   // The add-bar picker's "+ Nieuwe categorie" option is the one place to
   // create categories; it opens this controlled dialog.
   const [pickerAddOpen, setPickerAddOpen] = useState(false);
+  // Which of the two inputs the picker hands the caret to as it closes. A ref,
+  // not `pickerAddOpen`: Radix fires close-autofocus from a handler captured a
+  // render earlier, so the state it would read is still the pre-choice one.
+  const dialogWantsCaretRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   // The <main> element is the actual scrolling container (overflow-y-auto);
   // scrolled to bottom only after the current user adds an item.
@@ -499,6 +503,7 @@ export default function HouseholdClientPage({
               value={targetCategory ? String(targetCategory.id) : "none"}
               onValueChange={(value) => {
                 if (value === "new") {
+                  dialogWantsCaretRef.current = true;
                   setPickerAddOpen(true);
                   return;
                 }
@@ -525,9 +530,15 @@ export default function HouseholdClientPage({
                 sideOffset={10}
                 className="min-w-48 rounded-2xl border-border p-1.5 shadow-lg"
                 onCloseAutoFocus={(e) => {
+                  e.preventDefault();
+                  // "+ Nieuwe categorie" leaves a dialog open on top, and its
+                  // name field is what the user is about to type into.
+                  if (dialogWantsCaretRef.current) {
+                    dialogWantsCaretRef.current = false;
+                    return;
+                  }
                   // After picking a category, put the caret straight back in
                   // the item input so the user can type the item name.
-                  e.preventDefault();
                   inputRef.current?.focus();
                 }}
               >

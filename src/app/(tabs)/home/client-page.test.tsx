@@ -284,6 +284,25 @@ describe("HouseholdClientPage", () => {
       expect(fake.created).toEqual([["melk", "household", 7]]);
     });
 
+    it("puts the caret back in the item input once a category is picked", async () => {
+      const zuivel = aCategory({ id: 7, name: "Zuivel" });
+      renderHome({ initialData: aViewData({ items: [], categories: [zuivel] }) });
+
+      await userEvent.click(screen.getByLabelText("Categorie voor nieuwe items"));
+      await userEvent.click(screen.getByRole("option", { name: "Zuivel" }));
+
+      expect(addBar()).toHaveFocus();
+    });
+
+    it("puts the caret in the name field when the picker opens the new-category dialog", async () => {
+      renderHome({ initialData: aViewData({ items: [], categories: [] }) });
+
+      await userEvent.click(screen.getByLabelText("Categorie voor nieuwe items"));
+      await userEvent.click(screen.getByRole("option", { name: "Nieuwe categorie" }));
+
+      expect(screen.getByLabelText("Categorienaam")).toHaveFocus();
+    });
+
     it("keeps the items when their category is deleted", async () => {
       const zuivel = aCategory({ id: 7, name: "Zuivel" });
       const fake = renderHome({
