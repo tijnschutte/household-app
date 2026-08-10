@@ -7,9 +7,33 @@
 
 ## What it does
 
-Two or more people share a household. Anyone can add items, drop them into categories, and check them off while shopping — checked items stay visible, struck through at the bottom of their category, and everyone's phone keeps up without a manual refresh. Each person also gets a personal list alongside the shared one, and a Geld tab for splitting the household's recurring costs.
+Two or more people share a household. Anyone can add items, drop them into categories, and check them off while shopping — checked items stay visible, struck through at the bottom of their category, and everyone's phone keeps up without a manual refresh.
 
 The target device is a phone in a shopping aisle, not a desktop browser, so it installs as a PWA and pushes to your housemates when something lands on the list.
+
+## Stack
+
+Next.js 15 (App Router) · React 19 · TypeScript · Prisma + PostgreSQL (Neon) · NextAuth 5 · Tailwind CSS 4 + shadcn/ui · dnd-kit · Zod · Web Push · deployed on Vercel, package-managed with Bun.
+
+## Features
+
+| Feature                   | What it does                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Shared list** (`/home`) | The household's boodschappenlijst: add items, drag them between categories, check them off. Polls every 10 seconds, so every phone keeps up |
+| **Personal list**         | A second list on the same screen that only its owner sees, for what nobody else is shopping for                                             |
+| **Geld** (`/geld`)        | The household pot: recurring costs, what has been paid this month, corrections, and who owes what                                           |
+| **Huis** (`/huis`)        | Members and the join code, which optional tabs you want on your bar, and your notification settings                                         |
+| **Accounts & households** | Sign up, then found a household or join one with its code. Every query is scoped to the caller's household or their own rows                |
+| **PWA**                   | Installs to the home screen and runs standalone — a service worker handles caching and push                                                 |
+| **Notifications**         | Web Push to the rest of the household when something happens (below)                                                                        |
+
+### Notifications
+
+Adding an item to the shared list, or joining a household, pushes to everyone else in it — the actor is left out, and so is anyone who muted that topic. Topic choices follow the person across their devices; granting permission is per device. Delivery runs in `after()`, so it never delays or fails the action that raised it, and never throws.
+
+A push carries its topic as the notification tag, so five items in a row collapse into one row in the tray instead of stacking; tapping it opens the app at the right tab, re-using a window that is already open. Endpoints the push service reports as dead (404/410) are deleted as we go. A 403 is not treated as death — it usually means a wrong key — so the client instead compares the key its subscription was made with against the one in use, and trades in a stale one on the next visit.
+
+Source: `src/lib/notifications/` for who gets what and how it is sent, `worker/index.ts` for what the phone renders, `src/components/notifications/` for the settings card.
 
 ## Running it locally
 
@@ -78,11 +102,9 @@ bun run e2e                # a real request to a real production build
 
 `bun run e2e` is the slow one. None of the tools above render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright hits a real production build instead. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed, since each spec creates and cleans up its own accounts.
 
-## Notifications
+## Notifications locally
 
-Adding something to the shared list, or joining a household, pushes a notification to the other members — Web Push, so it reaches a phone with the app closed. Each person picks which topics they want on the Huis page; the choice follows the person across their devices, while granting permission is per device.
-
-Without VAPID keys notifications are simply off, and the server says so once at startup. To turn them on locally:
+Without VAPID keys notifications are simply off, and the server says so once at startup. To turn them on:
 
 ```bash
 bunx web-push generate-vapid-keys   # then fill in the VAPID_* vars in .env
@@ -94,7 +116,3 @@ Two things to know:
 - **The service worker is disabled in `next dev`**, so notifications cannot be tested with `bun run dev`. Use `bun run build && AUTH_TRUST_HOST=true bun run start` (NextAuth needs that variable outside Vercel).
 
 How the keys are scoped across environments, and what breaks when they are rotated, is in [docs/notifications.md](docs/notifications.md).
-
-## Stack
-
-Next.js 15 (App Router) · React 19 · TypeScript · Prisma + PostgreSQL (Neon) · NextAuth 5 · Tailwind CSS 4 + shadcn/ui · dnd-kit · Zod · deployed on Vercel, package-managed with Bun.
