@@ -9,7 +9,7 @@ import {
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/src/lib/auth";
-import { signUp } from "@/src/lib/actions";
+import { signUp } from "@/src/lib/account/actions";
 import SignUpForm from "@/src/components/auth/sign-up-form";
 import BrandMark from "@/src/components/brand-mark";
 

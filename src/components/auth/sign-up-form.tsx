@@ -8,7 +8,7 @@ import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { signUpSchema } from "@/src/lib/schema";
+import { signUpSchema } from "@/src/lib/account/schema";
 import type { ActionResult } from "@/src/lib/action-result";
 
 /**

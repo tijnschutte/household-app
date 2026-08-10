@@ -1,6 +1,4 @@
-import { auth } from "@/src/lib/auth";
-import { redirect } from "next/navigation";
-import { getCurrentHousehold } from "@/src/lib/data";
+import { requireMembership } from "@/src/lib/membership/gate";
 import { getGeldMonth, getRecurringItems } from "@/src/lib/geld/data";
 import { currentMonth, isValidMonth } from "@/src/lib/geld/money";
 import {
@@ -33,17 +31,7 @@ export default async function GeldPage({
 }: {
   searchParams: Promise<{ maand?: string }>;
 }) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/sign-in");
-  }
-
-  const household = await getCurrentHousehold();
-
-  if (!household) {
-    redirect("/household-setup");
-  }
+  await requireMembership();
 
   const { maand } = await searchParams;
   const month = maand && isValidMonth(maand) ? maand : currentMonth();

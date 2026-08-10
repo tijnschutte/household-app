@@ -40,7 +40,7 @@ import {
   formatMonthLabel,
   parseEuroToCents,
 } from "@/src/lib/geld/money";
-import type { RecurringItemRow } from "@/src/lib/geld/data";
+import type { RecurringItemRow } from "@/src/lib/geld/view";
 import type { ActionResult } from "@/src/lib/action-result";
 
 /**

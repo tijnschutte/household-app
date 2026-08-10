@@ -14,7 +14,7 @@ import AdjustmentsSection, {
 } from "@/src/components/geld/adjustments-section";
 import BeheerSheet, { type BeheerSheetActions } from "@/src/components/geld/beheer-sheet";
 import EmptyState from "@/src/components/geld/empty-state";
-import type { GeldMonth, RecurringItemRow } from "@/src/lib/geld/data";
+import type { GeldMonth, RecurringItemRow } from "@/src/lib/geld/view";
 
 /**
  * Everything the Geld page can do, handed down from the server page in one

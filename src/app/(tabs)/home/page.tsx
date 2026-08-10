@@ -1,8 +1,7 @@
-import { getCurrentHousehold, getHomeData } from "@/src/lib/data";
-import { redirect } from "next/navigation";
+import { requireMembership } from "@/src/lib/membership/gate";
+import { getHomeData } from "@/src/lib/house/data";
 import HouseholdClientPage, { type HomeActions } from "./client-page";
 import type { ViewKey } from "@/src/lib/house/grocery-view";
-import { auth } from "@/src/lib/auth";
 import {
   createCategory,
   createGroceryItem,
@@ -12,7 +11,7 @@ import {
   setGroceryBought,
   updateGroceryCategory,
   updateGroceryName,
-} from "@/src/lib/actions";
+} from "@/src/lib/house/actions";
 
 // The composition root for the home page: the only place that knows which
 // server action backs each operation the UI offers — and the only place that
@@ -49,14 +48,7 @@ const homeActions: HomeActions = {
 };
 
 export default async function Page() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    redirect("/sign-in");
-  }
-  const household = await getCurrentHousehold();
-  if (!household) {
-    redirect("/household-setup");
-  }
+  const { household } = await requireMembership();
   const initialData = await getHomeData(false);
 
   return (

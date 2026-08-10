@@ -1,5 +1,5 @@
 import { formatEuro } from "@/src/lib/geld/money";
-import type { GeldMonth } from "@/src/lib/geld/data";
+import type { GeldMonth } from "@/src/lib/geld/view";
 
 // One clean card: the all-time pot balance is the headline, the month's
 // netto and any still-unpaid items are a subtle line underneath. No

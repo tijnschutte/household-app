@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/src/components/ui/alert-dialog";
 import { formatEuro, parseEuroToCents } from "@/src/lib/geld/money";
-import type { GeldAdjustment } from "@/src/lib/geld/data";
+import type { GeldAdjustment } from "@/src/lib/geld/view";
 import type { ActionResult } from "@/src/lib/action-result";
 
 /**

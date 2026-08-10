@@ -20,7 +20,20 @@ Run this before claiming anything is done. The six gates are:
 | `format:check` | `prettier --check .`                     | formatting                                            |
 | `arch`         | `depcruise` vs `.dependency-cruiser.cjs` | import-boundary violations between app/components/lib |
 | `knip:ci`      | `knip`                                   | unused files, exports and dependencies                |
-| `test:run`     | `vitest run`                             | unit and component tests                              |
+| `test:run`     | `vitest run --project unit`              | unit and component tests                              |
+
+Two gates sit outside it because they need something running:
+
+```bash
+bun run test:integration   # server actions vs a real Postgres
+bun run e2e                # a real request to a real production build
+```
+
+`test:integration` is the one that guards **scoping** — that every query is
+confined to the caller's household or their own rows. Nothing in `verify` can
+see that rule: delete a `where` clause and types, lint, arch and the unit suite
+all stay green while one household starts editing another's list. Run it after
+touching anything in `lib/**/actions.ts` or `lib/**/data.ts`.
 
 `knip` is green as of the dependency cleanup that removed 15 unused packages.
 Read `knip.json` before adding an ignore — vendored shadcn and config-only
@@ -67,9 +80,10 @@ Two limits. **Async Server Components cannot be rendered** by Testing Library,
 so `src/app/**/page.tsx` is out of reach — that is what Playwright is for.
 
 No `"use client"` component imports a server action any more, so every one of
-them renders in a test. Keep it that way: a component that imports from
-`lib/actions` or `lib/geld/actions` pulls Prisma into the test process and
-becomes unrenderable.
+them renders in a test. Keep it that way: a component that imports from a
+`lib/**/actions.ts` or `lib/**/data.ts` pulls Prisma into the test process and
+becomes unrenderable. The shapes a screen renders live in `lib/**/view.ts`,
+which is Prisma-free — and `arch` now enforces the `data.ts` half of that.
 
 The pattern throughout is that a component exports the operations it needs and
 the server page supplies them — ordinary Next, and a test passes a fake instead
@@ -89,6 +103,30 @@ rules). Reach for those before writing a new transform inline.
 
 `tests/setup.ts` also stands in for `next-auth/react`, because `signIn`/`signOut`
 are client-only and a server page cannot hand them down.
+
+### Integration tests
+
+`*.integration.test.ts` sits beside its source too, but runs in the `integration`
+project: node environment, real Prisma, its own database.
+
+```bash
+bun run test:integration                          # starts + migrates mandje_test, then runs
+bunx vitest run --project integration src/lib/geld
+```
+
+The database is **`mandje_test`**, never `mandje` — every test truncates every
+table, and `tests/integration/setup.ts` refuses to start against a name that
+does not end in `_test`. `bun run test:integration` creates and migrates it for
+you; `TEST_DATABASE_URL` overrides the location.
+
+Three framework APIs are mocked in `tests/integration/setup.ts`, all of them
+things that need an HTTP request to exist: `auth()` (the test says who is
+calling, via `signInAs` — an action must never take a user id as an argument,
+which is the point), `after()` and `revalidatePath()`. Nothing else is faked.
+
+Arrange with `tests/integration/factories.ts`, which writes rows directly. Never
+arrange through the action you are about to test: it can only prove that action
+agrees with itself.
 
 ## Proving the tests are armed
 

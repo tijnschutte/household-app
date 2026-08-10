@@ -41,10 +41,23 @@ To watch the sync, log in as Sam in one browser and Robin in another — the lis
 | ----------------- | ------------------------------------------------------------------- |
 | `src/app/`        | Routes. A page fetches data and passes server actions down as props |
 | `src/components/` | The UI. `ui/` is vendored shadcn; the rest is ours                  |
-| `src/lib/`        | Server actions, database access, and the pure logic worth testing   |
-| `tests/`          | Shared fixtures and setup; unit tests sit beside their source       |
+| `src/lib/`        | One folder per subject, plus the few leaves they all share          |
+| `tests/`          | Shared fixtures and setup; tests sit beside their source            |
 
-Components never import server actions directly — the page that renders them passes the actions in, which is what lets a test hand them a fake instead.
+Under `src/lib/` each subject owns its own writes, reads and shapes, and is named for what it is about rather than for what kind of file it holds:
+
+| Folder           | What it is about                                                     |
+| ---------------- | -------------------------------------------------------------------- |
+| `house/`         | The boodschappenlijst: both lists, categories, ordering, ownership   |
+| `geld/`          | The household pot: recurring items, months, corrections, the balance |
+| `membership/`    | Founding, joining and leaving a household; who is in one             |
+| `account/`       | Signing up, and what a valid credential is                           |
+| `modules/`       | Which tabs exist and which of them a person has switched off         |
+| `notifications/` | Topics, who a push goes to, and getting it there                     |
+
+Within a folder the file names say the role: `actions.ts` writes, `data.ts` reads, `view.ts` holds the shapes a screen renders, `schema.ts` says what input is accepted. Everything else at the top of `src/lib/` is a leaf they share — the error contract, the session, the Prisma client under `db/`.
+
+Components never import server actions directly — the page that renders them passes the actions in, which is what lets a test hand them a fake instead. They never import a `data.ts` either: those open with `import prisma`, so a screen takes its types from the `view.ts` beside it.
 
 ## Checks
 
@@ -54,7 +67,16 @@ bun run verify   # typecheck, lint, format, architecture, knip, unit tests
 
 This is the fast gate. It runs in seconds and needs nothing running; `typecheck` and `lint` also run on commit via husky.
 
-`bun run e2e` is the slow one, and it catches what `verify` structurally cannot: none of those tools render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright hits a real production build instead. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed, since each spec creates and cleans up its own accounts.
+Two more gates need something running, and each catches what `verify` structurally cannot:
+
+```bash
+bun run test:integration   # server actions against a real Postgres
+bun run e2e                # a real request to a real production build
+```
+
+`test:integration` guards the rule the whole layering exists to protect: every query is confined to the caller's own household or their own rows. That rule lives in `where` clauses and unique constraints, so only a database can evaluate it — delete one and every check above stays green while one household starts editing another's list. It uses a throwaway `mandje_test` database, which the command creates and migrates for you.
+
+`bun run e2e` is the slow one. None of the tools above render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright hits a real production build instead. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed, since each spec creates and cleans up its own accounts.
 
 ## Notifications
 

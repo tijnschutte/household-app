@@ -68,6 +68,21 @@ module.exports = {
       to: { path: "^src/lib/db/" },
     },
     {
+      name: "a-screen-imports-the-shape-not-the-query",
+      comment:
+        "src/components/ must not import a lib/**/data.ts. Those modules open with " +
+        "`import prisma`; the shapes a screen renders live beside them in view.ts, which " +
+        "does not. Import the type from there. (This is the rule that replaces a " +
+        "convention: dependency-cruiser cannot tell `import type` from a value import, so " +
+        "a component reaching into a data module reads as safe right up until someone " +
+        "adds a value import to it and Prisma lands in the browser bundle.)",
+      severity: "error",
+      from: { path: "^src/components/" },
+      // Spelled as an alternation rather than an optional group: dependency-cruiser
+      // rejects a nested quantifier as an unsafe regular expression and bails out.
+      to: { path: "^src/lib/data\\.ts$|^src/lib/[^/]+/data\\.ts$" },
+    },
+    {
       name: "presentational-primitives-stay-presentational",
       comment:
         "src/components/ui/ must not import actions, data, auth or session. These are " +
@@ -89,11 +104,11 @@ module.exports = {
     {
       name: "the-validation-schema-is-a-shared-leaf",
       comment:
-        "src/lib/schema.ts must not import prisma, next or react. It is the zod " +
+        "A lib/**/schema.ts must not import prisma, next or react. It is the zod " +
         "contract that a client form and a server action both parse against; pulling " +
         "in a server-only dependency drags the Prisma client into the browser bundle.",
       severity: "error",
-      from: { path: "^src/lib/schema\\.ts$" },
+      from: { path: "^src/lib/[^/]+/schema\\.ts$" },
       to: { path: "^src/lib/db/|node_modules/(@prisma/|prisma/|next/|react(-dom)?/)" },
     },
     {

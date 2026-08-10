@@ -8,7 +8,7 @@ import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { signInSchema } from "@/src/lib/schema";
+import { signInSchema } from "@/src/lib/account/schema";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);

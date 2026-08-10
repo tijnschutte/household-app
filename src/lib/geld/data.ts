@@ -2,37 +2,7 @@ import prisma from "@/src/lib/db/db";
 import { requireUser } from "@/src/lib/session";
 import { RecurringKind } from "@prisma/client";
 import { summarizeMonth, EMPTY_MONTH_FIGURES } from "@/src/lib/geld/summary";
-
-export type GeldItem = {
-  id: number;
-  name: string;
-  kind: RecurringKind;
-  expectedCents: number;
-  activeFrom: string;
-  activeTo: string | null;
-  entry: { id: number; amountCents: number; paidAt: Date } | null;
-};
-
-export type GeldAdjustment = {
-  id: number;
-  amountCents: number;
-  note: string | null;
-  createdAt: Date;
-};
-
-export type GeldMonth = {
-  month: string;
-  contributions: GeldItem[];
-  expenses: GeldItem[];
-  paidIn: number;
-  paidOut: number;
-  adjustments: GeldAdjustment[];
-  adjustmentSum: number;
-  netto: number;
-  unpaidCount: number;
-  /** All-time balance across every month ("op rekening"), not just this month. */
-  balanceCents: number;
-};
+import type { GeldItem, GeldMonth, RecurringItemRow } from "@/src/lib/geld/view";
 
 // Items "active" in month m: activeFrom <= m && (activeTo == null || activeTo >= m).
 function activeInMonthWhere(month: string) {
@@ -132,16 +102,6 @@ export async function getGeldMonth(month: string): Promise<GeldMonth> {
 
   return { month, contributions, expenses, adjustments, ...figures };
 }
-
-export type RecurringItemRow = {
-  id: number;
-  name: string;
-  kind: RecurringKind;
-  expectedCents: number;
-  activeFrom: string;
-  activeTo: string | null;
-  hasEntries: boolean;
-};
 
 /** All recurring items (including ended ones) for the beheer view. */
 export async function getRecurringItems(): Promise<RecurringItemRow[]> {

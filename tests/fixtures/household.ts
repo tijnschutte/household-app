@@ -3,7 +3,7 @@
  * about; everything else gets a neutral default.
  */
 
-import type { HouseholdWithMembers } from "@/src/lib/data";
+import type { HouseholdWithMembers } from "@/src/lib/membership/view";
 import type { ActionResult } from "@/src/lib/action-result";
 
 export function aHousehold(overrides: Partial<HouseholdWithMembers> = {}): HouseholdWithMembers {

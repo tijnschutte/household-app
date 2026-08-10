@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { HouseholdWithMembers } from "@/src/lib/data";
+import type { HouseholdWithMembers } from "@/src/lib/membership/view";
 import {
   Card,
   CardContent,

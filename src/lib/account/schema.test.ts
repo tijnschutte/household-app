@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { signUpSchema, signInSchema, groceryItemSchema, categorySchema } from "./schema";
-
+import { signUpSchema, signInSchema } from "./schema";
 /**
  * These schemas are the only definition of what a valid credential is: the sign-up
  * action, the credentials provider and both forms all parse through them. The rules
@@ -75,35 +74,5 @@ describe("signInSchema", () => {
     expect(firstError(signInSchema.safeParse({ username: "ti jn", password: "geheim" }))).toBe(
       "Gebruikersnaam mag geen spaties bevatten"
     );
-  });
-});
-
-describe("groceryItemSchema", () => {
-  it("accepts an ordinary item name", () => {
-    expect(groceryItemSchema.safeParse({ name: "melk" }).success).toBe(true);
-  });
-
-  it("rejects a name that is only whitespace", () => {
-    expect(groceryItemSchema.safeParse({ name: "   " }).success).toBe(false);
-  });
-
-  it("rejects an empty name", () => {
-    expect(groceryItemSchema.safeParse({ name: "" }).success).toBe(false);
-  });
-});
-
-describe("categorySchema", () => {
-  it("trims the surrounding whitespace off a category name", () => {
-    const result = categorySchema.safeParse({ name: "  Jumbo  " });
-
-    expect(result.success && result.data.name).toBe("Jumbo");
-  });
-
-  it("rejects a name that is only whitespace", () => {
-    expect(categorySchema.safeParse({ name: "   " }).success).toBe(false);
-  });
-
-  it("caps a category name at thirty characters", () => {
-    expect(categorySchema.safeParse({ name: "a".repeat(31) }).success).toBe(false);
   });
 });

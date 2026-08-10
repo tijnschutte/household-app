@@ -1,7 +1,5 @@
-import { auth } from "@/src/lib/auth";
-import { redirect } from "next/navigation";
-import { getCurrentHousehold } from "@/src/lib/data";
-import { leaveHousehold } from "@/src/lib/actions";
+import { requireMembership } from "@/src/lib/membership/gate";
+import { leaveHousehold } from "@/src/lib/membership/actions";
 import {
   forgetDevice,
   getMutedTopics,
@@ -17,17 +15,7 @@ import SignOutButton from "@/src/components/auth/sign-out-button";
 import BackButton from "@/src/components/back-button";
 
 export default async function HuisPage() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/sign-in");
-  }
-
-  const household = await getCurrentHousehold();
-
-  if (!household) {
-    redirect("/household-setup");
-  }
+  const { userId, household } = await requireMembership();
 
   const [mutedTopics, hiddenModules] = await Promise.all([getMutedTopics(), getHiddenModules()]);
 
@@ -35,11 +23,7 @@ export default async function HuisPage() {
     <div className="flex h-full w-full flex-col">
       <PageHeader title="Huis" left={<BackButton />} right={<SignOutButton />} />
       <main className="w-full max-w-2xl mx-auto flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        <HouseholdInfo
-          household={household}
-          userId={Number(session.user.id)}
-          onLeaveHousehold={leaveHousehold}
-        />
+        <HouseholdInfo household={household} userId={userId} onLeaveHousehold={leaveHousehold} />
         <NotificationSettings
           mutedTopics={mutedTopics}
           onRegisterDevice={registerDevice}
