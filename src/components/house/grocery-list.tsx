@@ -23,8 +23,6 @@ import {
   closestCorners,
   useDraggable,
   useDroppable,
-  type SensorDescriptor,
-  type SensorOptions,
 } from "@dnd-kit/core";
 import { Button } from "../ui/button";
 import {
@@ -72,11 +70,6 @@ function CheckCircle({ bought }: { bought: boolean }) {
     </div>
   );
 }
-
-// Until the client has mounted, DndContext is rendered without sensors: they
-// attach window/DOM listeners a server render must not. Module-level so the
-// identity is stable and dnd-kit doesn't re-register on every render.
-const NO_SENSORS: SensorDescriptor<SensorOptions>[] = [];
 
 // Width of the red "Verwijderen" action revealed by swiping a row left.
 const SWIPE_ACTION_WIDTH = 96;
@@ -555,7 +548,6 @@ export default function GroceryList({
 }: GroceryListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
   // Non-empty category pending delete confirmation (empty ones delete
   // immediately, no dialog).
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
@@ -569,10 +561,6 @@ export default function GroceryList({
     }
     onBusyChange(activeDragId !== null || editingIdsRef.current.size > 0);
   };
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -712,14 +700,24 @@ export default function GroceryList({
   );
 
   // The list content must render in the server HTML so WP-2's fast first paint
-  // isn't wasted. What is gated on mount is only the parts that touch
-  // window/DOM — the sensors and the overlay — and never the element type of
-  // what we return: swapping the root from a div to DndContext between the
-  // first and second render is a type change, so React would throw the whole
-  // painted list away and rebuild it.
+  // isn't wasted. What must never change between the first and second render
+  // is the element type of what we return: swapping the root from a div to
+  // DndContext is a type change, so React would throw the whole painted list
+  // away and rebuild it.
   return (
     <DndContext
-      sensors={isMounted ? sensors : NO_SENSORS}
+      // dnd-kit otherwise names its accessibility description from a
+      // module-level counter, which the server and the client do not agree on.
+      id="grocery-list"
+      // Passed unconditionally, and it has to be. dnd-kit spreads the sensor
+      // list into a dependency array; withholding the sensors until mount makes
+      // that array grow from empty, and React does not support a dependency
+      // array that changes size. It stops re-running the effect that attaches
+      // the activators, so the drag handle keeps the listener-less props of the
+      // first render and silently does nothing on a server-rendered page.
+      // Nothing here needs the gate: these are plain descriptors, and dnd-kit
+      // only touches the DOM from effects, which never run on the server.
+      sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
