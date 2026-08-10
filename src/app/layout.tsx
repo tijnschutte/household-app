@@ -18,6 +18,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#1e3a8a",
   viewportFit: "cover",
+  // Let the keyboard shrink the layout viewport, so a centred dialog stays on
+  // screen without measuring anything. Chromium only — iOS Safari has never
+  // supported it, which is what useVisualViewportCenter is there to cover.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
