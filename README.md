@@ -7,82 +7,72 @@
 
 ## What it does
 
-Two or more people share a household. Anyone can add items, drop them into categories, and check them off while shopping. Checked items stay visible (struck through, sunk to the bottom of their category). Everyone's phone stays in sync without a manual refresh. Each person also gets a personal list alongside the shared one.
+Two or more people share a household. Anyone can add items, drop them into categories, and check them off while shopping — checked items stay visible, struck through at the bottom of their category, and everyone's phone keeps up without a manual refresh. Each person also gets a personal list alongside the shared one, and a Geld tab for splitting the household's recurring costs.
 
-Installable as a PWA; the target device is a phone in a shopping aisle, not a desktop browser.
+The target device is a phone in a shopping aisle, not a desktop browser, so it installs as a PWA and pushes to your housemates when something lands on the list.
 
-## Features
+## Running it locally
 
-- Shared household list + personal list, toggled with one tap
-- Categories with drag-and-drop, inline rename, swipe-to-delete
-- Check off in place, undo on delete/clear
-- Quick-add with a sticky "add to this category" picker
-- Join a household via a shareable code; members list on the info page
-- Real-time-ish sync across devices (polling)
-- Push notifications to your housemates' phones, switchable per person per topic
-- Optional tabs (currently Geld) that each person can switch off for themselves
-- Installable PWA with offline-capable service worker
+You need [Bun](https://bun.sh) and Docker running — Docker hosts the Postgres database, and nothing else has to be installed by hand.
+
+```bash
+cp .env.example .env
+bun install
+bun run dev:fresh
+```
+
+That starts Postgres in Docker, builds the schema, fills it with demo data, and opens the app on **http://localhost:3000**. The defaults in `.env.example` work as-is; the database URL already matches the Docker service.
+
+Use `bun run dev:fresh` for a first run or whenever you want a clean slate — it wipes the database and reseeds. Day to day, `bun run dev:local` is the one you want: same thing, but it keeps whatever you already have in there.
+
+### Logging in
+
+The demo data gives you a household **Testhuishouden** (join code `LOCALDEV1234`) with two members, **Sam** and **Robin**, both with password `password`. You get four categories of groceries with a couple already checked off, a personal list for Sam, and a part-paid current month in Geld.
+
+To watch the sync, log in as Sam in one browser and Robin in another — the list polls every 10 seconds.
+
+### The database commands on their own
+
+`db:up` and `db:down` start and stop Postgres, `db:migrate` applies the schema, `db:seed` loads the demo data, `db:reset` wipes and redoes all three, and `db:studio` opens a browser UI onto the data.
+
+## Where things live
+
+| Path              | What's in it                                                        |
+| ----------------- | ------------------------------------------------------------------- |
+| `src/app/`        | Routes. A page fetches data and passes server actions down as props |
+| `src/components/` | The UI. `ui/` is vendored shadcn; the rest is ours                  |
+| `src/lib/`        | Server actions, database access, and the pure logic worth testing   |
+| `tests/`          | Shared fixtures and setup; unit tests sit beside their source       |
+
+Components never import server actions directly — the page that renders them passes the actions in, which is what lets a test hand them a fake instead.
+
+## Checks
+
+```bash
+bun run verify   # typecheck, lint, format, architecture, knip, unit tests
+```
+
+This is the fast gate. It runs in seconds and needs nothing running; `typecheck` and `lint` also run on commit via husky.
+
+`bun run e2e` is the slow one, and it catches what `verify` structurally cannot: none of those tools render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright hits a real production build instead. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed, since each spec creates and cleans up its own accounts.
+
+## Notifications
+
+Adding something to the shared list, or joining a household, pushes a notification to the other members — Web Push, so it reaches a phone with the app closed. Each person picks which topics they want on the Huis page; the choice follows the person across their devices, while granting permission is per device.
+
+Without VAPID keys notifications are simply off, and the server says so once at startup. To turn them on locally:
+
+```bash
+bunx web-push generate-vapid-keys   # then fill in the VAPID_* vars in .env
+```
+
+Two things to know:
+
+- **iOS only delivers Web Push to an installed PWA.** In Safari-as-a-browser the switch is disabled and says to add Mandje to the home screen first.
+- **The service worker is disabled in `next dev`**, so notifications cannot be tested with `bun run dev`. Use `bun run build && AUTH_TRUST_HOST=true bun run start` (NextAuth needs that variable outside Vercel).
+
+How the keys are scoped across environments, and what breaks when they are rotated, is in [docs/notifications.md](docs/notifications.md).
 
 ## Stack
 
 Next.js 15 (App Router) · React 19 · TypeScript · Prisma + PostgreSQL (Neon) · NextAuth 5 · Tailwind CSS 4 + shadcn/ui · dnd-kit · Zod · deployed on Vercel, package-managed with Bun.
-
-## Running it locally
-
-Copy `.env.example` to `.env`, then:
-
-```bash
-bun install
-bun run dev:local   # postgres in docker + migrations + the app
-```
-
-`dev:local` keeps whatever is already in your database. `bun run dev:fresh` wipes it and reseeds instead — use that for a clean slate. The individual steps (`db:up`, `db:migrate`, `db:seed`, `db:reset`, `db:down`, `db:studio`) are still there if you want them one at a time.
-
-The seed gives you a household "CD26" (join code `LOCALDEV1234`) with two members, **Tijn** and **Dirk**, both with password `password`. It fills the shared list with four categories of groceries — a couple already checked off — a personal list for Tijn, and a part-paid current month in Geld. To see the cross-device sync, log in as Tijn in one browser and Dirk in another; the list polls every 10 seconds.
-
-`bun run typecheck` and `bun run lint` run automatically on commit via husky.
-
-## Checks
-
-`bun run verify` is the fast gate: typecheck, lint, format, architecture, knip, unit tests. It runs in seconds and needs nothing running.
-
-`bun run e2e` is the slow one, and it exists for the failures `verify` structurally cannot see. None of those tools render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright makes a real request to a real production build and looks at what came back. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed: each spec creates the accounts it needs and deletes them afterwards.
-
-## Notifications
-
-Adding something to the shared list, or joining a household, pushes a notification to
-the other members — Web Push, so it reaches a phone with the app closed. Each person
-picks which topics they want on the Huis page; the choice follows the person across
-their devices, while granting permission is per device.
-
-Two things to know:
-
-- **iOS only delivers Web Push to an installed PWA.** In Safari-as-a-browser the switch
-  is disabled and says to add Mandje to the home screen first.
-- **The service worker is disabled in `next dev`**, so notifications cannot be tested
-  with `bun run dev`. Use `bun run build && AUTH_TRUST_HOST=true bun run start`
-  (NextAuth needs that variable outside Vercel).
-
-Set the keys before any of this works — without them notifications are simply off, and
-the server says so once at startup:
-
-```bash
-bunx web-push generate-vapid-keys   # then fill in the VAPID_* vars from .env.example
-```
-
-### Which pair goes where
-
-Production and Preview share one pair, because they share one database: a subscription
-made on a preview URL lands in the same table production pushes from, and a subscription
-can only be pushed to with the key it was created against. Local dev uses its own pair —
-it talks to the docker database, and a key on a laptop should not be able to reach a real
-phone. Vercel's "Development" scope is deliberately left unset, so `vercel env pull`
-cannot quietly arm a checkout with production push credentials.
-
-Rotating the pair silently breaks every existing subscription: the push service answers
-403, which is **not** treated as a dead device — a 401/403 is far more often our own
-misconfiguration (a wrong key deployed, a skewed clock invalidating the VAPID JWT), and
-deleting every household's subscriptions over that is not something anyone can undo.
-Recovery happens on the client instead: the settings screen compares the key a
-subscription was made with against the key in use, and trades in a stale one. So after a
-rotation, each member starts receiving again the next time they open the Huis page.
