@@ -27,6 +27,7 @@ import {
 } from "@/src/components/ui/alert-dialog";
 import { centsToInputValue, formatEuro, parseEuroToCents } from "@/src/lib/geld/money";
 import type { GeldItem } from "@/src/lib/geld/data";
+import type { ActionResult } from "@/src/lib/action-result";
 
 /**
  * The two operations this section needs, owned here rather than imported from
@@ -34,8 +35,12 @@ import type { GeldItem } from "@/src/lib/geld/data";
  * test passes a fake. Keeps Prisma out of anything that renders this.
  */
 export type ItemSectionActions = {
-  onMarkPaid: (recurringItemId: number, month: string, amountCents: number) => Promise<unknown>;
-  onUndoPaid: (recurringItemId: number, month: string) => Promise<unknown>;
+  onMarkPaid: (
+    recurringItemId: number,
+    month: string,
+    amountCents: number
+  ) => Promise<ActionResult>;
+  onUndoPaid: (recurringItemId: number, month: string) => Promise<ActionResult>;
 };
 
 function MarkPaidDialog({
@@ -68,12 +73,21 @@ function MarkPaidDialog({
     }
     setIsSaving(true);
     try {
-      await onMarkPaid(item.id, month, cents);
+      const result = await onMarkPaid(item.id, month, cents);
+
+      // "Al betaald" arrives as a value; thrown, its message would be redacted
+      // in production and the dialog would close on a write that never landed.
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success(`${item.name} gemarkeerd als betaald`);
       onOpenChange(false);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Markeren als betaald mislukt");
+      console.error("Failed to mark paid:", error);
+      toast.error("Markeren als betaald mislukt");
     } finally {
       setIsSaving(false);
     }
@@ -129,12 +143,18 @@ function ItemRow({
   const handleUndo = async () => {
     setIsUndoing(true);
     try {
-      await onUndoPaid(item.id, month);
+      const result = await onUndoPaid(item.id, month);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success(`${item.name} weer op onbetaald gezet`);
       setUndoOpen(false);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ongedaan maken mislukt");
+      console.error("Failed to undo paid:", error);
+      toast.error("Ongedaan maken mislukt");
     } finally {
       setIsUndoing(false);
     }

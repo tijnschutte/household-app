@@ -3,30 +3,34 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ItemSection from "./item-section";
 import { aGeldItem } from "@/tests/fixtures/geld";
+import { succeeds, fails } from "@/tests/fixtures/household";
 
 /**
  * A stand-in for the server actions. It records what it was asked to do and
- * resolves, so a test can assert on the outcome the user sees rather than on
- * the call itself. `fail()` makes it reject, for the error paths.
+ * reports the outcome, so a test can assert on what the user sees rather than
+ * on the call itself. `rejectWith()` makes it refuse — a returned result, the
+ * way the real action reports "Al betaald", not a throw.
  */
 function fakeActions() {
   const markPaidCalls: Array<[number, string, number]> = [];
   const undoPaidCalls: Array<[number, string]> = [];
-  let failure: Error | null = null;
+  let rejection: string | null = null;
 
   return {
     markPaidCalls,
     undoPaidCalls,
-    fail(error: Error) {
-      failure = error;
+    rejectWith(message: string) {
+      rejection = message;
     },
     onMarkPaid: async (id: number, month: string, cents: number) => {
-      if (failure) throw failure;
+      if (rejection) return fails(rejection);
       markPaidCalls.push([id, month, cents]);
+      return succeeds("Gelukt");
     },
     onUndoPaid: async (id: number, month: string) => {
-      if (failure) throw failure;
+      if (rejection) return fails(rejection);
       undoPaidCalls.push([id, month]);
+      return succeeds("Gelukt");
     },
   };
 }
@@ -130,7 +134,7 @@ describe("ItemSection", () => {
 
     it("keeps the dialog open when the server rejects, so the amount is not lost", async () => {
       const actions = renderSection();
-      actions.fail(new Error("Item is niet actief in deze maand"));
+      actions.rejectWith("Item is niet actief in deze maand");
 
       await userEvent.click(screen.getByRole("button", { name: "Huur: markeer als betaald" }));
       await userEvent.click(screen.getByRole("button", { name: "Bevestigen" }));

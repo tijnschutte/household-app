@@ -5,6 +5,7 @@ import { schema, groceryItemSchema, categorySchema } from "@/src/lib/schema";
 import db from "@/src/lib/db/db";
 import { executeAction } from "@/src/lib/executeAction";
 import { DomainError } from "@/src/lib/domain-error";
+import { rejectingDuplicates } from "@/src/lib/db/duplicates";
 import { requireUser } from "@/src/lib/session";
 import { notifyHousehold } from "@/src/lib/notifications/notify";
 import { groceryAdded, memberJoined } from "@/src/lib/notifications/topics";
@@ -34,22 +35,6 @@ import { Prisma } from "@prisma/client";
 // Never trust a client-supplied householdId/userId for this.
 function scopeWhere(userId: number, householdId: number | null) {
   return householdId != null ? { OR: [{ householdId }, { userId }] } : { userId };
-}
-
-/**
- * Runs a write whose unique constraint the user can trip by hand — typing a
- * name that is already on the list — and reports that collision as copy they
- * can act on, rather than a Prisma error code.
- */
-async function rejectingDuplicates<T>(write: () => Promise<T>, message: string): Promise<T> {
-  try {
-    return await write();
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new DomainError(message);
-    }
-    throw error;
-  }
 }
 
 export const signUp = async (formData: FormData) => {

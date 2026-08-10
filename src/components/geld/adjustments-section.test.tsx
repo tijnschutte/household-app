@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AdjustmentsSection from "./adjustments-section";
 import { anAdjustment } from "@/tests/fixtures/geld";
+import { succeeds, fails } from "@/tests/fixtures/household";
 
 // Intl separates the currency symbol with a non-breaking space, but Testing
 // Library normalizes that to a plain space before matching — so a DOM query
@@ -11,27 +12,30 @@ const euro = (amount: string) => `€ ${amount}`;
 
 /**
  * A stand-in for the server actions. It records what it was asked to do and
- * resolves, so a test can assert on the outcome the user sees rather than on
- * the call itself. `fail()` makes it reject, for the error paths.
+ * reports the outcome, so a test can assert on what the user sees rather than
+ * on the call itself. `rejectWith()` makes it refuse — a returned result, the
+ * way the real action reports a rejected amount, not a throw.
  */
 function fakeActions() {
   const addCalls: Array<[string, number, string | undefined]> = [];
   const deleteCalls: number[] = [];
-  let failure: Error | null = null;
+  let rejection: string | null = null;
 
   return {
     addCalls,
     deleteCalls,
-    fail(error: Error) {
-      failure = error;
+    rejectWith(message: string) {
+      rejection = message;
     },
     onAddAdjustment: async (month: string, amountCents: number, note?: string) => {
-      if (failure) throw failure;
+      if (rejection) return fails(rejection);
       addCalls.push([month, amountCents, note]);
+      return succeeds("Gelukt");
     },
     onDeleteAdjustment: async (id: number) => {
-      if (failure) throw failure;
+      if (rejection) return fails(rejection);
       deleteCalls.push(id);
+      return succeeds("Gelukt");
     },
   };
 }
@@ -135,7 +139,7 @@ describe("AdjustmentsSection", () => {
 
     it("keeps the dialog open when the server rejects, so the input is not lost", async () => {
       const actions = renderSection();
-      actions.fail(new Error("Bedrag is te hoog"));
+      actions.rejectWith("Bedrag is te hoog");
 
       await openAddDialog();
       await userEvent.type(screen.getByLabelText("Bedrag"), "12,34");

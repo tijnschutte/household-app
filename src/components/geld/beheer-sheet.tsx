@@ -41,6 +41,7 @@ import {
   parseEuroToCents,
 } from "@/src/lib/geld/money";
 import type { RecurringItemRow } from "@/src/lib/geld/data";
+import type { ActionResult } from "@/src/lib/action-result";
 
 /**
  * The four operations this sheet needs, owned here rather than imported from
@@ -48,18 +49,20 @@ import type { RecurringItemRow } from "@/src/lib/geld/data";
  * test passes a fake. Keeps Prisma out of anything that renders this.
  */
 export type BeheerSheetActions = {
+  // `unknown` on purpose: creating returns the new post, and this sheet closes
+  // and refreshes rather than reading it.
   onCreateItem: (
     name: string,
     kind: RecurringKind,
     expectedCents: number,
     activeFrom: string
-  ) => Promise<unknown>;
+  ) => Promise<ActionResult<unknown>>;
   onUpdateItem: (
     id: number,
     updates: { name?: string; expectedCents?: number }
-  ) => Promise<unknown>;
-  onEndItem: (id: number, lastMonth: string) => Promise<unknown>;
-  onDeleteItem: (id: number) => Promise<unknown>;
+  ) => Promise<ActionResult>;
+  onEndItem: (id: number, lastMonth: string) => Promise<ActionResult>;
+  onDeleteItem: (id: number) => Promise<ActionResult>;
 };
 
 const KIND_LABEL: Record<RecurringKind, string> = {
@@ -164,12 +167,21 @@ function AddItemDialog({
 
     setIsSaving(true);
     try {
-      await onCreateItem(draft.name, kind, draft.cents, activeFrom);
+      const result = await onCreateItem(draft.name, kind, draft.cents, activeFrom);
+
+      // "Bestaat al" needs the form left open with the name still in it, so a
+      // rejection must not take the same path as a save.
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success("Post aangemaakt");
       onOpenChange(false);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Opslaan mislukt");
+      console.error("Failed to create recurring item:", error);
+      toast.error("Opslaan mislukt");
     } finally {
       setIsSaving(false);
     }
@@ -276,12 +288,18 @@ function EditItemDialog({
 
     setIsSaving(true);
     try {
-      await onUpdateItem(item.id, { name: draft.name, expectedCents: draft.cents });
+      const result = await onUpdateItem(item.id, { name: draft.name, expectedCents: draft.cents });
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success("Post bijgewerkt");
       onOpenChange(false);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Opslaan mislukt");
+      console.error("Failed to update recurring item:", error);
+      toast.error("Opslaan mislukt");
     } finally {
       setIsSaving(false);
     }
@@ -345,12 +363,18 @@ function EndItemDialog({
     if (!item) return;
     setIsSaving(true);
     try {
-      await onEndItem(item.id, lastMonth);
+      const result = await onEndItem(item.id, lastMonth);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success(`${item.name} beëindigd`);
       onOpenChange(false);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Beëindigen mislukt");
+      console.error("Failed to end recurring item:", error);
+      toast.error("Beëindigen mislukt");
     } finally {
       setIsSaving(false);
     }
@@ -413,12 +437,21 @@ function RecurringItemRowView({
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      await onDeleteItem(item.id);
+      const result = await onDeleteItem(item.id);
+
+      // "Item is al gebruikt — beëindig het" is the whole point of this
+      // confirm: the user needs to read it and reach for Beëindigen instead.
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success(`${item.name} verwijderd`);
       setConfirmDeleteOpen(false);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Verwijderen mislukt");
+      console.error("Failed to delete recurring item:", error);
+      toast.error("Verwijderen mislukt");
     } finally {
       setIsDeleting(false);
     }

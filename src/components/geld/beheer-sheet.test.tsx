@@ -2,29 +2,32 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RecurringKind } from "@prisma/client";
+import { useRouter } from "next/navigation";
 import BeheerSheet from "./beheer-sheet";
 import { currentMonth } from "@/src/lib/geld/money";
 import { aRecurringItem } from "@/tests/fixtures/geld";
+import { succeeds, fails } from "@/tests/fixtures/household";
 
 /**
  * A stand-in for the server actions. It records what it was asked to do and
- * resolves, so a test can assert on the outcome the user sees rather than on
- * the call itself. `fail()` makes it reject, for the error paths.
+ * reports the outcome, so a test can assert on what the user sees rather than
+ * on the call itself. `rejectWith()` makes it refuse — a returned result, the
+ * way the real action reports "Bestaat al", not a throw.
  */
 function fakeActions() {
   const created: Array<[string, RecurringKind, number, string]> = [];
   const updated: Array<[number, { name?: string; expectedCents?: number }]> = [];
   const ended: Array<[number, string]> = [];
   const deleted: number[] = [];
-  let failure: Error | null = null;
+  let rejection: string | null = null;
 
   return {
     created,
     updated,
     ended,
     deleted,
-    fail(error: Error) {
-      failure = error;
+    rejectWith(message: string) {
+      rejection = message;
     },
     onCreateItem: async (
       name: string,
@@ -32,20 +35,24 @@ function fakeActions() {
       expectedCents: number,
       activeFrom: string
     ) => {
-      if (failure) throw failure;
+      if (rejection) return fails(rejection);
       created.push([name, kind, expectedCents, activeFrom]);
+      return succeeds("Gelukt");
     },
     onUpdateItem: async (id: number, updates: { name?: string; expectedCents?: number }) => {
-      if (failure) throw failure;
+      if (rejection) return fails(rejection);
       updated.push([id, updates]);
+      return succeeds("Gelukt");
     },
     onEndItem: async (id: number, lastMonth: string) => {
-      if (failure) throw failure;
+      if (rejection) return fails(rejection);
       ended.push([id, lastMonth]);
+      return succeeds("Gelukt");
     },
     onDeleteItem: async (id: number) => {
-      if (failure) throw failure;
+      if (rejection) return fails(rejection);
       deleted.push(id);
+      return succeeds("Gelukt");
     },
   };
 }
@@ -162,7 +169,7 @@ describe("BeheerSheet", () => {
 
     it("keeps the dialog open when the server rejects, so the input is not lost", async () => {
       const actions = renderSheet({ items: [] });
-      actions.fail(new Error("Bestaat al"));
+      actions.rejectWith("Bestaat al");
 
       await openAddDialog();
       await userEvent.type(screen.getByLabelText("Naam"), "Huur");
@@ -261,6 +268,21 @@ describe("BeheerSheet", () => {
       renderSheet({ items: [aRecurringItem({ name: "Ziggo", hasEntries: true })] });
 
       expect(screen.getByRole("button", { name: "Ziggo verwijderen" })).toBeDisabled();
+    });
+
+    // The button above is disabled on what the page was rendered with, so the
+    // server's refusal is what covers someone paying the post in another tab
+    // between the render and the click. Radix closes the confirm on either
+    // outcome, so what separates them is that a refused delete leaves the page
+    // alone — there is nothing new to read.
+    it("does not refresh the page when the server refuses the delete", async () => {
+      const actions = renderSheet({ items: [aRecurringItem({ id: 8, name: "Ziggo" })] });
+      actions.rejectWith("Item is al gebruikt — beëindig het in plaats van verwijderen");
+
+      await userEvent.click(screen.getByRole("button", { name: "Ziggo verwijderen" }));
+      await userEvent.click(screen.getByRole("button", { name: "Verwijderen" }));
+
+      expect(useRouter().refresh).not.toHaveBeenCalled();
     });
   });
 });

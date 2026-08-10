@@ -27,6 +27,7 @@ import {
 } from "@/src/components/ui/alert-dialog";
 import { formatEuro, parseEuroToCents } from "@/src/lib/geld/money";
 import type { GeldAdjustment } from "@/src/lib/geld/data";
+import type { ActionResult } from "@/src/lib/action-result";
 
 /**
  * The two operations this section needs, owned here rather than imported from
@@ -34,8 +35,8 @@ import type { GeldAdjustment } from "@/src/lib/geld/data";
  * test passes a fake. Keeps Prisma out of anything that renders this.
  */
 export type AdjustmentsSectionActions = {
-  onAddAdjustment: (month: string, amountCents: number, note?: string) => Promise<unknown>;
-  onDeleteAdjustment: (adjustmentId: number) => Promise<unknown>;
+  onAddAdjustment: (month: string, amountCents: number, note?: string) => Promise<ActionResult>;
+  onDeleteAdjustment: (adjustmentId: number) => Promise<ActionResult>;
 };
 
 function AddAdjustmentDialog({
@@ -71,12 +72,18 @@ function AddAdjustmentDialog({
     }
     setIsSaving(true);
     try {
-      await onAddAdjustment(month, cents * sign, note.trim() || undefined);
+      const result = await onAddAdjustment(month, cents * sign, note.trim() || undefined);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success("Correctie toegevoegd");
       close();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Toevoegen correctie mislukt");
+      console.error("Failed to add adjustment:", error);
+      toast.error("Toevoegen correctie mislukt");
     } finally {
       setIsSaving(false);
     }
@@ -172,12 +179,18 @@ function AdjustmentRow({
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      await onDeleteAdjustment(adjustment.id);
+      const result = await onDeleteAdjustment(adjustment.id);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success("Correctie verwijderd");
       setConfirmOpen(false);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Verwijderen correctie mislukt");
+      console.error("Failed to delete adjustment:", error);
+      toast.error("Verwijderen correctie mislukt");
     } finally {
       setIsDeleting(false);
     }
