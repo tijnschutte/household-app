@@ -3,25 +3,26 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AddCategory from "./add-category";
 import { aCategory } from "@/tests/fixtures/house";
+import { succeeds, fails } from "@/tests/fixtures/household";
 import type { ViewKey } from "@/src/lib/house/grocery-view";
 
 /**
  * A stand-in for the createCategory server action. It records the name and
- * scope it was handed, and returns the row the real action would return.
+ * scope it was handed, and returns the result the real action would return —
+ * a rejection is a value here, exactly as it is over the wire.
  */
-function fakeCreate(result = aCategory({ id: 9, name: "Jumbo" })) {
+function fakeCreate(category = aCategory({ id: 9, name: "Jumbo" })) {
   const calls: Array<[string, ViewKey]> = [];
-  let failure: Error | null = null;
+  let outcome = succeeds("Categorie aangemaakt", category);
 
   return {
     calls,
-    fail(error: Error) {
-      failure = error;
+    rejectWith(message: string) {
+      outcome = fails(message);
     },
     onCreateCategory: async (name: string, view: ViewKey) => {
-      if (failure) throw failure;
       calls.push([name, view]);
-      return result;
+      return outcome;
     },
   };
 }
@@ -85,7 +86,7 @@ describe("AddCategory", () => {
 
   it("keeps the name on screen when the server rejects it", async () => {
     const create = fakeCreate();
-    create.fail(new Error("Categorie bestaat al"));
+    create.rejectWith("Categorie bestaat al");
     const { onCategoryAdded } = renderDialog({ create });
 
     await userEvent.type(screen.getByLabelText("Categorienaam"), "Jumbo");

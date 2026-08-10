@@ -17,8 +17,10 @@ import { signOut } from "next-auth/react";
  * test passes a fake. Keeps Prisma out of anything that renders this.
  */
 export type HouseholdSetupActions = {
-  onCreateHousehold: (formData: FormData) => Promise<ActionResult>;
-  onJoinHousehold: (formData: FormData) => Promise<ActionResult>;
+  // `unknown` on purpose: both actions return the household they made, and
+  // this screen navigates away rather than reading it.
+  onCreateHousehold: (formData: FormData) => Promise<ActionResult<unknown>>;
+  onJoinHousehold: (formData: FormData) => Promise<ActionResult<unknown>>;
 };
 
 type SetupTab = "create" | "join";

@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import HouseholdClientPage, { type HomeActions } from "./client-page";
 import { aCategory, aGrocery, aViewData } from "@/tests/fixtures/house";
+import { succeeds, fails } from "@/tests/fixtures/household";
 import type { ViewData, ViewKey } from "@/src/lib/house/grocery-view";
 
 const householdId = 1;
@@ -15,7 +16,8 @@ const householdId = 1;
 function fakeActions({
   personalData = aViewData(),
   failCreate = false,
-}: { personalData?: ViewData; failCreate?: boolean } = {}) {
+  failRename = false,
+}: { personalData?: ViewData; failCreate?: boolean; failRename?: boolean } = {}) {
   const created: Array<[string, ViewKey, number | null | undefined]> = [];
   const bought: Array<[number, boolean]> = [];
   const deleted: number[][] = [];
@@ -30,9 +32,14 @@ function fakeActions({
       return view === "personal" ? personalData : aViewData();
     },
     onCreateItem: async (name, view, categoryId) => {
-      if (failCreate) throw new Error("Toevoegen mislukt");
+      // A refusal is a returned result, not a throw — the same way the real
+      // action reports "staat al in je lijst".
+      if (failCreate) return fails("Toevoegen mislukt");
       created.push([name, view, categoryId]);
-      return aGrocery({ id: 500 + created.length, name, categoryId: categoryId ?? null });
+      return succeeds(
+        "Toegevoegd",
+        aGrocery({ id: 500 + created.length, name, categoryId: categoryId ?? null })
+      );
     },
     onSetBought: async (id, next) => {
       bought.push([id, next]);
@@ -45,12 +52,14 @@ function fakeActions({
     },
     onUpdateItemCategory: async () => {},
     onRenameItem: async (id, name) => {
+      if (failRename) return fails('"karnemelk" staat al in je lijst');
       renamed.push([id, name]);
+      return succeeds("Naam bijgewerkt");
     },
     onDeleteCategory: async (id) => {
       categoriesDeleted.push(id);
     },
-    onCreateCategory: async (name) => aCategory({ id: 99, name }),
+    onCreateCategory: async (name) => succeeds("Categorie aangemaakt", aCategory({ id: 99, name })),
   };
 
   return { actions, created, bought, deleted, restored, renamed, categoriesDeleted, loaded };
@@ -133,6 +142,9 @@ describe("HouseholdClientPage", () => {
       await userEvent.type(addBar(), "brood{Enter}");
 
       expect(screen.queryByText("brood")).not.toBeInTheDocument();
+      // The optimistic row has to be gone, not just emptied of its name: the
+      // list is back to the one item it started with.
+      expect(screen.getAllByRole("button", { name: /hernoemen$/ })).toHaveLength(1);
     });
   });
 
@@ -212,6 +224,15 @@ describe("HouseholdClientPage", () => {
       await rename("melk", "karnemelk");
 
       expect(screen.getByText("karnemelk")).toBeInTheDocument();
+    });
+
+    it("keeps the old name when the server refuses the new one", async () => {
+      renderHome({ failRename: true });
+
+      await rename("melk", "karnemelk");
+
+      expect(screen.getByText("melk")).toBeInTheDocument();
+      expect(screen.queryByText("karnemelk")).not.toBeInTheDocument();
     });
   });
 

@@ -16,5 +16,19 @@ export function aHousehold(overrides: Partial<HouseholdWithMembers> = {}): House
   };
 }
 
-export const succeeds = (message: string): ActionResult => ({ success: true, message });
-export const fails = (message: string): ActionResult => ({ success: false, message });
+/**
+ * The two halves of an ActionResult, as a fake action returns them.
+ *
+ * `succeeds` carries the value the real action would return —
+ * `succeeds("Aangemaakt", aCategory())` — or nothing for an action that
+ * returns nothing. `fails` needs no value type at all: a failure looks the
+ * same whatever the action would have returned, so one failure fits every
+ * `ActionResult<T>` a fake is asked for.
+ */
+export function succeeds<T = void>(message: string, value?: T): ActionResult<T> {
+  return { success: true, message, value: value as T };
+}
+
+export function fails(message: string): { success: false; message: string } {
+  return { success: false, message };
+}

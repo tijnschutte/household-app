@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/src/components/ui/dialog";
 import { Category } from "@prisma/client";
+import type { ActionResult } from "@/src/lib/action-result";
 import type { ViewKey } from "@/src/lib/house/grocery-view";
 import { toast } from "sonner";
 
@@ -22,7 +23,7 @@ import { toast } from "sonner";
  * test passes a fake. Keeps Prisma out of anything that renders this.
  */
 export type AddCategoryActions = {
-  onCreateCategory: (name: string, view: ViewKey) => Promise<Category>;
+  onCreateCategory: (name: string, view: ViewKey) => Promise<ActionResult<Category>>;
 };
 
 type AddCategoryProps = {
@@ -59,15 +60,23 @@ export default function AddCategory({
 
     setIsCreating(true);
     try {
-      const category = await onCreateCategory(categoryName, view);
+      const result = await onCreateCategory(categoryName, view);
+
+      // An expected failure arrives as a result, not an exception, and its
+      // message is the only one written for a human — the catch below cannot
+      // see it, because in production nothing thrown carries a message at all.
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       toast.success(`Categorie "${categoryName}" aangemaakt`);
       setCategoryName("");
       setIsOpen(false);
-      onCategoryAdded(category);
+      onCategoryAdded(result.value);
     } catch (error) {
       console.error("Failed to create category:", error);
-      const errorMessage = error instanceof Error ? error.message : "Aanmaken categorie mislukt";
-      toast.error(errorMessage);
+      toast.error("Aanmaken categorie mislukt");
     } finally {
       setIsCreating(false);
     }

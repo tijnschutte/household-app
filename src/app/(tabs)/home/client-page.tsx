@@ -29,6 +29,7 @@ import AddCategory, { type AddCategoryActions } from "@/src/components/add-categ
 import PageHeader from "@/src/components/page-header";
 import HuisButton from "@/src/components/huis-button";
 import { toast } from "sonner";
+import type { ActionResult } from "@/src/lib/action-result";
 
 /**
  * Everything the home screen can do, handed down from the server page in one
@@ -41,12 +42,12 @@ export type HomeActions = {
     name: string,
     view: ViewKey,
     categoryId?: number | null
-  ) => Promise<Grocery | GroceryWithCategory>;
+  ) => Promise<ActionResult<Grocery | GroceryWithCategory>>;
   onSetBought: (groceryId: number, bought: boolean) => Promise<unknown>;
   onDeleteItems: (ids: number[]) => Promise<unknown>;
   onRestoreItems: (items: RestoreSnapshot[]) => Promise<unknown>;
   onUpdateItemCategory: (groceryId: number, categoryId: number | null) => Promise<unknown>;
-  onRenameItem: (groceryId: number, name: string) => Promise<unknown>;
+  onRenameItem: (groceryId: number, name: string) => Promise<ActionResult>;
   onDeleteCategory: (categoryId: number) => Promise<unknown>;
 } & AddCategoryActions;
 
@@ -301,12 +302,23 @@ export default function HouseholdClientPage({
     });
 
     try {
-      const newItem = await actions.onCreateItem(trimmedName, view, addCategory?.id ?? null);
-      updateView(view, (data) => replaceItem(data, tempId, { ...newItem, category: addCategory }));
+      const result = await actions.onCreateItem(trimmedName, view, addCategory?.id ?? null);
+
+      // "Brood staat al in je lijst" arrives here, as a value. Thrown, its
+      // message would be redacted in production and the user would read a
+      // paragraph about Server Components instead.
+      if (!result.success) {
+        toast.error(result.message);
+        updateView(view, (data) => removeItems(data, [tempId]));
+        return;
+      }
+
+      updateView(view, (data) =>
+        replaceItem(data, tempId, { ...result.value, category: addCategory })
+      );
     } catch (error) {
       console.error("Failed to create grocery item:", error);
-      const errorMessage = error instanceof Error ? error.message : "Toevoegen mislukt";
-      toast.error(errorMessage);
+      toast.error("Toevoegen mislukt");
       updateView(view, (data) => removeItems(data, [tempId]));
     }
   };
@@ -400,7 +412,15 @@ export default function HouseholdClientPage({
     }
     const normalized = parsed.name;
     try {
-      await actions.onRenameItem(groceryId, normalized);
+      const result = await actions.onRenameItem(groceryId, normalized);
+
+      // Renaming onto a name already on the list is the same collision the
+      // add bar can hit, and the user needs the same sentence back.
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
       updateView(view, (data) => renameItemIn(data, groceryId, normalized));
       toast.success("Item hernoemd");
     } catch (error) {
