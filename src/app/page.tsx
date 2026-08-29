@@ -1,12 +1,11 @@
-import { auth } from "@/src/lib/auth";
 import { redirect } from "next/navigation";
+import { isSignedIn } from "@/src/lib/membership/gate";
 
 const Page = async () => {
-  const session = await auth();
-  if (!session) redirect("/sign-in");
+  if (!(await isSignedIn())) redirect("/sign-in");
 
   // /home itself redirects to /household-setup when the user has no
-  // household, so no DB lookup is needed on this hot startup path.
+  // household, so nothing beyond isSignedIn's own check is needed here.
   redirect("/home");
 };
 

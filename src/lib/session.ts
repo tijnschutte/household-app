@@ -4,6 +4,20 @@ import db from "@/src/lib/db/db";
 import { DomainError } from "@/src/lib/domain-error";
 
 /**
+ * The caller has no valid session, or has one for a user row that no longer
+ * exists (e.g. a cookie that outlived a `db:reset`). A server action lets
+ * this crash — a bug should surface as a stack trace, not a polite redirect.
+ * `requireSignedIn` (membership/gate.ts) is the one place that catches it and
+ * sends the visitor to /sign-in instead.
+ */
+export class NotSignedInError extends Error {
+  constructor() {
+    super("Niet ingelogd");
+    this.name = "NotSignedInError";
+  }
+}
+
+/**
  * Derives the authenticated caller's scope (userId + householdId) from the
  * session and the database — never from client-supplied input. Every server
  * action / data fetch that touches Grocery or Category rows should call this
@@ -21,7 +35,7 @@ export const requireUser = cache(
   }> => {
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Niet ingelogd");
+      throw new NotSignedInError();
     }
 
     const userId = Number(session.user.id);
@@ -31,7 +45,7 @@ export const requireUser = cache(
     });
 
     if (!user) {
-      throw new Error("Niet ingelogd");
+      throw new NotSignedInError();
     }
 
     return { userId, name: user.name, householdId: user.householdId };

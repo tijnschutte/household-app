@@ -1,4 +1,3 @@
-import { auth } from "@/src/lib/auth";
 import {
   Card,
   CardContent,
@@ -9,12 +8,15 @@ import {
 } from "@/src/components/ui/card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { isSignedIn } from "@/src/lib/membership/gate";
 import SignInForm from "@/src/components/auth/sign-in-form";
 import BrandMark from "@/src/components/brand-mark";
 
 const Page = async () => {
-  const session = await auth();
-  if (session) redirect("/");
+  // A raw JWT check would bounce a session for a deleted user straight back
+  // to "/", which sends it here again — an infinite loop instead of ever
+  // reaching sign-in. isSignedIn confirms the user row is still there.
+  if (await isSignedIn()) redirect("/");
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4">

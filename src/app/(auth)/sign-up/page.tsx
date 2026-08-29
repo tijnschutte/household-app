@@ -8,14 +8,15 @@ import {
 } from "@/src/components/ui/card";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/src/lib/auth";
+import { isSignedIn } from "@/src/lib/membership/gate";
 import { signUp } from "@/src/lib/account/actions";
 import SignUpForm from "@/src/components/auth/sign-up-form";
 import BrandMark from "@/src/components/brand-mark";
 
 const Page = async () => {
-  const session = await auth();
-  if (session) redirect("/");
+  // See sign-in/page.tsx: a raw JWT check here would loop against "/" for a
+  // session whose user row is gone.
+  if (await isSignedIn()) redirect("/");
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4">
