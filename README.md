@@ -100,7 +100,7 @@ bun run e2e                # a real request to a real production build
 
 `test:integration` guards the rule the whole layering exists to protect: every query is confined to the caller's own household or their own rows. That rule lives in `where` clauses and unique constraints, so only a database can evaluate it — delete one and every check above stays green while one household starts editing another's list. It uses a throwaway `mandje_test` database, which the command creates and migrates for you.
 
-`bun run e2e` is the slow one. None of the tools above render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright hits a real production build instead. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed, since each spec creates and cleans up its own accounts.
+`bun run e2e` is the slow one, and the one a feature is not done without — what a spec there has to cover, and how to hand the pass to an agent, is in [docs/browser-pass.md](docs/browser-pass.md). None of the tools above render an async Server Component, so a page that fails to serialize its props — and therefore never renders at all — passes every one of them. Playwright hits a real production build instead. It needs a migrated database (`bun run db:up && bun run db:migrate`) but no seed, since each spec creates and cleans up its own accounts.
 
 ## Notifications locally
 
