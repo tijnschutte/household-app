@@ -56,6 +56,15 @@ export function groceryAdded(actorName: string, itemName: string): PushNotificat
   };
 }
 
+export function recipeAddedToBasket(actorName: string, recipeTitle: string): PushNotification {
+  return {
+    topic: "GROCERY_ADDED",
+    title: "Boodschappen",
+    body: `${actorName} zette ${recipeTitle} in het mandje`,
+    url: "/home",
+  };
+}
+
 export function memberJoined(actorName: string, householdName: string): PushNotification {
   return {
     topic: "MEMBER_JOINED",

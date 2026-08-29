@@ -3,6 +3,7 @@
 import prisma from "@/src/lib/db/db";
 import { requireUser } from "@/src/lib/session";
 import { scopeToList } from "@/src/lib/house/scope";
+import type { GroceryWithCategory } from "@/src/lib/house/grocery-view";
 
 /**
  * `"use server"` here, unlike the other data modules, because the home screen
@@ -34,5 +35,13 @@ export async function getHomeData(personal: boolean) {
     prisma.category.findMany({ where: list, orderBy: { name: "asc" } }),
   ]);
 
-  return { items, categories };
+  // Prisma's Decimal is a class instance, which Next's server-action
+  // serialization cannot carry across to a Client Component — convert it to
+  // a plain number here, at the one place every polled row crosses the wire.
+  const clientItems: GroceryWithCategory[] = items.map((item) => ({
+    ...item,
+    quantity: item.quantity === null ? null : Number(item.quantity),
+  }));
+
+  return { items: clientItems, categories };
 }

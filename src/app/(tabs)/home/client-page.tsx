@@ -2,7 +2,7 @@
 
 import { Grocery } from "@prisma/client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { User, House, Plus, Tag, Loader2 } from "lucide-react";
+import { User, House, Plus, Tag, Loader2, ChefHat } from "lucide-react";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/src/components/ui/select";
@@ -28,6 +28,9 @@ import GroceryList from "@/src/components/house/grocery-list";
 import AddCategory, { type AddCategoryActions } from "@/src/components/add-category";
 import PageHeader from "@/src/components/page-header";
 import HuisButton from "@/src/components/huis-button";
+import ListMatchSheet, {
+  type ListMatchSheetActions,
+} from "@/src/components/recepten/list-match-sheet";
 import { toast } from "sonner";
 import type { ActionResult } from "@/src/lib/action-result";
 
@@ -42,14 +45,15 @@ export type HomeActions = {
     name: string,
     view: ViewKey,
     categoryId?: number | null
-  ) => Promise<ActionResult<Grocery | GroceryWithCategory>>;
+  ) => Promise<ActionResult<Omit<Grocery, "quantity"> & { quantity: number | null }>>;
   onSetBought: (groceryId: number, bought: boolean) => Promise<unknown>;
   onDeleteItems: (ids: number[]) => Promise<unknown>;
   onRestoreItems: (items: RestoreSnapshot[]) => Promise<unknown>;
   onUpdateItemCategory: (groceryId: number, categoryId: number | null) => Promise<unknown>;
   onRenameItem: (groceryId: number, name: string) => Promise<ActionResult>;
   onDeleteCategory: (categoryId: number) => Promise<unknown>;
-} & AddCategoryActions;
+} & AddCategoryActions &
+  ListMatchSheetActions;
 
 type HouseholdClientPageProps = {
   /**
@@ -141,6 +145,9 @@ export default function HouseholdClientPage({
   // Counts down so each optimistic add gets a unique temp id that can never
   // collide with a real (positive) database id.
   const tempIdRef = useRef(-1);
+  // "Past bij je lijstje": always matched against the household list, whichever
+  // view is currently on screen.
+  const [matchSheetOpen, setMatchSheetOpen] = useState(false);
 
   const currentView = dataByView[view];
   const groceryList = currentView?.items ?? [];
@@ -286,7 +293,10 @@ export default function HouseholdClientPage({
     const optimisticItem: GroceryWithCategory = {
       id: tempId,
       name: trimmedName,
-      quantity: 1,
+      // A hand-typed item never carries a quantity or unit; those only arrive
+      // with an item added from a recipe (recepten/actions.ts).
+      quantity: null,
+      unit: null,
       bought: false,
       householdId: view === "personal" ? null : householdId,
       userId: null,
@@ -437,7 +447,21 @@ export default function HouseholdClientPage({
     <div className="h-full w-full flex flex-col">
       {/* Fixed title matching the tab label; which list is visible is the
           toggle's job, and the household name lives on the Huis page. */}
-      <PageHeader title="Mandje" left={<HuisButton />} />
+      <PageHeader
+        title="Mandje"
+        left={<HuisButton />}
+        right={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Past bij je lijstje"
+            className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
+            onClick={() => setMatchSheetOpen(true)}
+          >
+            <ChefHat className="h-5 w-5" />
+          </Button>
+        }
+      />
 
       {/* List-view toggle directly under the header: it's navigation (which
           list you're looking at), kept away from the footer now that the
@@ -608,6 +632,15 @@ export default function HouseholdClientPage({
           </Button>
         </div>
       </footer>
+
+      <ListMatchSheet
+        open={matchSheetOpen}
+        onOpenChange={setMatchSheetOpen}
+        // Always the household list, whichever view is on screen — bought
+        // items included, since the point is what's already in the house.
+        listNames={(dataByView.household?.items ?? []).map((item) => item.name)}
+        onLoadRecipesForMatch={actions.onLoadRecipesForMatch}
+      />
     </div>
   );
 }

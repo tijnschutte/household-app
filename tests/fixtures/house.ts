@@ -21,7 +21,8 @@ export function aGrocery(overrides: Partial<GroceryWithCategory> = {}): GroceryW
   return {
     id: 1,
     name: "melk",
-    quantity: 1,
+    quantity: null,
+    unit: null,
     bought: false,
     householdId: 1,
     userId: null,

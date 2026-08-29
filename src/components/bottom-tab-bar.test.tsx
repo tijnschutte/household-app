@@ -18,7 +18,7 @@ describe("BottomTabBar", () => {
   });
 
   it("gives the remaining tabs the whole bar rather than leaving a gap", () => {
-    const { container } = render(<BottomTabBar hiddenModules={["GELD"]} />);
+    const { container } = render(<BottomTabBar hiddenModules={["GELD", "RECEPTEN"]} />);
 
     // One column per surviving tab: hiding one is meant to widen the others,
     // which a fixed two-column grid would not do.

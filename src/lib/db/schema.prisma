@@ -25,6 +25,7 @@ model User {
 // it, or it is a switch that hides nothing.
 enum OptionalModule {
   GELD
+  RECEPTEN
 }
 
 // A module a user has switched off. Same trade as NotificationMute: storing
@@ -82,6 +83,9 @@ model Household {
   categories     Category[]
   recurringItems RecurringItem[]
   adjustments    Adjustment[]
+  recipes        Recipe[]
+  ingredients    Ingredient[]
+  recipeTags     RecipeTag[]
 }
 
 model Category {
@@ -99,21 +103,85 @@ model Category {
 }
 
 model Grocery {
-  id          Int        @id @default(autoincrement())
+  id          Int             @id @default(autoincrement())
   name        String
-  quantity    Int?       @default(1)
-  bought      Boolean?   @default(false)
-  household   Household? @relation(fields: [householdId], references: [id])
+  // No default: null means "just the name" — quantity/unit only arrive with an
+  // item added from a recipe (see recepten/basket.ts). A hand-typed item has both.
+  quantity    Decimal?        @db.Decimal(10, 2)
+  unit        String?
+  bought      Boolean?        @default(false)
+  household   Household?      @relation(fields: [householdId], references: [id])
   householdId Int?
-  User        User?      @relation(fields: [userId], references: [id])
+  User        User?           @relation(fields: [userId], references: [id])
   userId      Int?
-  category    Category?  @relation(fields: [categoryId], references: [id])
+  category    Category?       @relation(fields: [categoryId], references: [id])
   categoryId  Int?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @default(now()) @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @default(now()) @updatedAt
 
   @@unique([name, householdId])
   @@unique([name, userId])
+}
+
+// A household's own vocabulary of ingredient names, built up as recipes are
+// written. Shared with the shopping list only by name — adding a recipe's
+// ingredients to the mandje (recepten/basket.ts) matches on Grocery.name, not
+// on this table, so nothing here constrains what a person can type on the list.
+model Ingredient {
+  id          Int                @id @default(autoincrement())
+  householdId Int
+  household   Household          @relation(fields: [householdId], references: [id])
+  // Stored lowercase and trimmed so the unique constraint dedups regardless of
+  // typing, same trade as Grocery.name.
+  name        String
+  lines       RecipeIngredient[]
+
+  @@unique([householdId, name])
+}
+
+// A household's own tags for filtering recipes ("Snel", "Vegetarisch", ...).
+// Display case is kept (unlike Ingredient.name) because a tag is read as a
+// label, not matched against free text.
+model RecipeTag {
+  id          Int       @id @default(autoincrement())
+  householdId Int
+  household   Household @relation(fields: [householdId], references: [id])
+  name        String
+  recipes     Recipe[]
+
+  @@unique([householdId, name])
+}
+
+// A household-shared recipe. Any member may create, edit or delete any
+// recipe — there is no per-recipe owner, unlike the two grocery lists.
+model Recipe {
+  id           Int                @id @default(autoincrement())
+  householdId  Int
+  household    Household          @relation(fields: [householdId], references: [id])
+  title        String
+  instructions String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @default(now()) @updatedAt
+  ingredients  RecipeIngredient[]
+  tags         RecipeTag[]
+
+  @@unique([householdId, title])
+}
+
+// One ingredient line on a recipe. `position` is the order the form and the
+// detail screen show the lines in — insertion order isn't guaranteed to
+// survive the wholesale delete-and-recreate an edit does (recepten/actions.ts).
+model RecipeIngredient {
+  id           Int         @id @default(autoincrement())
+  recipeId     Int
+  recipe       Recipe      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredientId Int
+  ingredient   Ingredient  @relation(fields: [ingredientId], references: [id])
+  quantity     Decimal?    @db.Decimal(10, 2)
+  unit         String?
+  position     Int
+
+  @@unique([recipeId, ingredientId])
 }
 
 enum RecurringKind {

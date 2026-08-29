@@ -5,7 +5,14 @@
 
 import type { Grocery, Category } from "@prisma/client";
 
-export type GroceryWithCategory = Grocery & { category: Category | null };
+// `quantity` crosses the server/client boundary as a plain number, never a
+// Prisma Decimal: only data.ts and actions.ts touch the database type, and
+// they convert before a row ever reaches a client component (see
+// house/data.ts and house/actions.ts).
+export type GroceryWithCategory = Omit<Grocery, "quantity"> & {
+  quantity: number | null;
+  category: Category | null;
+};
 
 /**
  * Which of the two lists is on screen. The word for it, so the UI never has to
@@ -107,6 +114,8 @@ export type RestoreSnapshot = {
   categoryId: number | null;
   personal: boolean;
   bought?: boolean;
+  quantity: number | null;
+  unit: string | null;
 };
 
 export function snapshotForRestore(item: GroceryWithCategory): RestoreSnapshot {
@@ -114,6 +123,8 @@ export function snapshotForRestore(item: GroceryWithCategory): RestoreSnapshot {
     name: item.name,
     categoryId: item.categoryId,
     personal: item.userId !== null,
+    quantity: item.quantity,
+    unit: item.unit,
     bought: item.bought ?? false,
   };
 }

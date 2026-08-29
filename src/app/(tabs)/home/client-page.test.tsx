@@ -60,6 +60,7 @@ function fakeActions({
       categoriesDeleted.push(id);
     },
     onCreateCategory: async (name) => succeeds("Categorie aangemaakt", aCategory({ id: 99, name })),
+    onLoadRecipesForMatch: async () => [],
   };
 
   return { actions, created, bought, deleted, restored, renamed, categoriesDeleted, loaded };

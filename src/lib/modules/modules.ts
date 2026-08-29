@@ -1,5 +1,5 @@
 import type { OptionalModule } from "@prisma/client";
-import { ShoppingBasket, Wallet, type LucideIcon } from "lucide-react";
+import { ShoppingBasket, Wallet, CookingPot, type LucideIcon } from "lucide-react";
 
 /**
  * The catalogue of tabs, and the rule for which of them a given person sees.
@@ -34,6 +34,12 @@ export const OPTIONAL_MODULES = {
     label: "Geld",
     description: "De pot van het huishouden: wie legt in, wat gaat eruit",
     icon: Wallet,
+  },
+  RECEPTEN: {
+    href: "/recepten",
+    label: "Recepten",
+    description: "Recepten van het huishouden, zo in je mandje",
+    icon: CookingPot,
   },
   // Tripwire: Record demands a key per module in the schema, so adding one to
   // the enum stops this compiling rather than shipping a tab nobody can hide.

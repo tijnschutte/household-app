@@ -174,6 +174,98 @@ async function seedList(sections: ListSection[], owner: ListOwner) {
   }
 }
 
+type RecipeSeed = {
+  title: string;
+  instructions: string;
+  tags: string[];
+  ingredients: { name: string; quantity: number | null; unit: string | null }[];
+};
+
+const RECIPES: RecipeSeed[] = [
+  {
+    title: "Pasta pesto",
+    instructions:
+      "Kook de pasta beetgaar volgens de verpakking.\n\n" +
+      "Rasp de kaas en meng met de pesto door de afgegoten pasta.\n\n" +
+      "Breng op smaak met peper en serveer direct.",
+    tags: ["Snel", "Vegetarisch"],
+    ingredients: [
+      { name: "pasta", quantity: 200, unit: "gram" },
+      { name: "pesto", quantity: 1, unit: "pot" },
+      { name: "parmezaanse kaas", quantity: 30, unit: "gram" },
+    ],
+  },
+  {
+    title: "Tomatensoep",
+    instructions:
+      "Fruit de ui in een scheutje olie tot glazig.\n\n" +
+      "Voeg de tomaten en bouillon toe en laat 20 minuten sudderen.\n\n" +
+      "Pureer de soep glad en breng op smaak met peper en zout.",
+    tags: ["Vegetarisch"],
+    ingredients: [
+      { name: "ui", quantity: 1, unit: null },
+      { name: "tomaten", quantity: 800, unit: "gram" },
+      { name: "groentebouillon", quantity: 500, unit: "ml" },
+    ],
+  },
+  {
+    title: "Kip curry",
+    instructions:
+      "Snijd de kip in blokjes en bak ze aan in een hete pan.\n\n" +
+      "Voeg de currypasta en kokosmelk toe en laat 15 minuten sudderen.\n\n" +
+      "Serveer met rijst.",
+    tags: ["Snel"],
+    ingredients: [
+      { name: "kipfilet", quantity: 400, unit: "gram" },
+      { name: "currypasta", quantity: 2, unit: "el" },
+      { name: "kokosmelk", quantity: 1, unit: "blik" },
+      { name: "rijst", quantity: 250, unit: "gram" },
+    ],
+  },
+];
+
+async function seedRecipes(householdId: number) {
+  for (const recipe of RECIPES) {
+    const ingredients = await Promise.all(
+      recipe.ingredients.map((ingredient) =>
+        prisma.ingredient.upsert({
+          where: { householdId_name: { householdId, name: ingredient.name } },
+          update: {},
+          create: { householdId, name: ingredient.name },
+        })
+      )
+    );
+    const tags = await Promise.all(
+      recipe.tags.map((name) =>
+        prisma.recipeTag.upsert({
+          where: { householdId_name: { householdId, name } },
+          update: {},
+          create: { householdId, name },
+        })
+      )
+    );
+
+    await prisma.recipe.upsert({
+      where: { householdId_title: { householdId, title: recipe.title } },
+      update: {},
+      create: {
+        householdId,
+        title: recipe.title,
+        instructions: recipe.instructions,
+        tags: { connect: tags.map((tag) => ({ id: tag.id })) },
+        ingredients: {
+          create: recipe.ingredients.map((ingredient, index) => ({
+            ingredientId: ingredients[index].id,
+            quantity: ingredient.quantity,
+            unit: ingredient.unit,
+            position: index,
+          })),
+        },
+      },
+    });
+  }
+}
+
 async function seedGeld(householdId: number, month: string) {
   for (const item of RECURRING_ITEMS) {
     const recurringItem = await prisma.recurringItem.upsert({
@@ -210,6 +302,7 @@ async function main() {
   await seedList(SHARED_LIST, { householdId: household.id });
   await seedList(PERSONAL_LIST, { userId: members[0].id });
   await seedGeld(household.id, month);
+  await seedRecipes(household.id);
 
   const sharedItems = SHARED_LIST.reduce((total, s) => total + s.items.length, 0);
   console.log(`Seeded: household "${household.name}" (join code ${household.secret})`);
@@ -221,6 +314,7 @@ async function main() {
       `plus a personal list for ${MEMBERS[0].name}`
   );
   console.log(`Seeded: ${RECURRING_ITEMS.length} recurring Geld items, part-paid for ${month}`);
+  console.log(`Seeded: ${RECIPES.length} recipes`);
 }
 
 main()

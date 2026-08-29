@@ -107,7 +107,13 @@ export async function createGroceryItem(
         );
       }
 
-      return groceryItem;
+      // Prisma's Decimal is a class instance and cannot cross a server action
+      // back to a Client Component — convert it to a plain number here, same
+      // as getHomeData does for the polled rows.
+      return {
+        ...groceryItem,
+        quantity: groceryItem.quantity === null ? null : Number(groceryItem.quantity),
+      };
     },
   });
 }
@@ -137,7 +143,14 @@ export async function deleteItems(ids: number[]) {
  * What restoring one deleted item needs. Each carries enough to rebuild the row
  * inside the caller's own scope — never a client-supplied household or user id.
  */
-type RestoreItem = { name: string; categoryId: number | null; personal: boolean; bought?: boolean };
+type RestoreItem = {
+  name: string;
+  categoryId: number | null;
+  personal: boolean;
+  bought?: boolean;
+  quantity?: number | null;
+  unit?: string | null;
+};
 
 /**
  * Puts back what `deleteItems` just removed, for "Ongedaan maken".
@@ -163,6 +176,8 @@ export async function restoreItems(items: RestoreItem[]) {
           name: item.name,
           categoryId,
           bought: item.bought ?? true,
+          quantity: item.quantity ?? null,
+          unit: item.unit ?? null,
           ...ownerOfList(caller, item.personal),
         },
       });

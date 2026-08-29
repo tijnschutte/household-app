@@ -27,7 +27,8 @@
     // Backs the vendored primitives ignored above.
     "@radix-ui/react-alert-dialog",
     "@radix-ui/react-tooltip",
-    "@hookform/resolvers",
-    "react-hook-form"
+    // recepten/recipe-form.tsx uses react-hook-form directly but validates
+    // with recipeSchema.safeParse rather than the zodResolver adapter.
+    "@hookform/resolvers"
   ]
 }

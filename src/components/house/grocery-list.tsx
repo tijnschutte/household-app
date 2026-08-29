@@ -8,6 +8,7 @@ import {
   UNCATEGORIZED_DROP_ID,
 } from "@/src/lib/house/grocery-order";
 import { MAX_ITEM_NAME_LENGTH, type GroceryWithCategory } from "@/src/lib/house/grocery-view";
+import { formatQuantity } from "@/src/lib/quantity";
 import { ShoppingCart, Trash2, Pencil, GripVertical, Check, Plus } from "lucide-react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input";
@@ -90,6 +91,7 @@ function DraggableGroceryItem({
   onEditingChange?: (editing: boolean) => void;
 }) {
   const bought = item.bought ?? false;
+  const quantityLabel = formatQuantity(item.quantity, item.unit);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(item.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -328,12 +330,15 @@ function DraggableGroceryItem({
       >
         <CheckCircle bought={bought} />
         <span
-          className={`truncate w-full text-base min-w-0 first-letter:uppercase ${
+          className={`truncate flex-1 text-base min-w-0 first-letter:uppercase ${
             bought ? "text-gray-400 line-through" : "text-gray-800 font-medium"
           }`}
         >
           {item.name}
         </span>
+        {quantityLabel && (
+          <span className="shrink-0 text-sm text-gray-400 tabular-nums">{quantityLabel}</span>
+        )}
         {/* Checked rows stay minimal: circle + struck name only. Renaming a
             checked item is pointless, and it can't be dragged (see
             `disabled: bought` above) so the handle is hidden too. Swipe
