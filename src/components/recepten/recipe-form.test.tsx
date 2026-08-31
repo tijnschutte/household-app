@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRouter } from "next/navigation";
 import RecipeForm from "./recipe-form";
@@ -173,5 +173,127 @@ describe("RecipeForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "Annuleren" }));
 
     expect(deleted).toEqual([]);
+  });
+
+  describe("quantity (B1)", () => {
+    it("parses a unicode fraction and a mixed number", async () => {
+      const submit = renderForm();
+
+      await userEvent.type(screen.getByLabelText("Titel"), "Pasta pesto");
+      await userEvent.type(screen.getAllByLabelText("Ingrediëntnaam")[0], "ui");
+      await userEvent.type(screen.getAllByLabelText("Hoeveelheid")[0], "1 ½");
+      await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
+
+      expect(submit.calls).toEqual([
+        {
+          title: "Pasta pesto",
+          instructions: "",
+          ingredients: [{ name: "ui", quantity: 1.5, unit: null }],
+          tags: [],
+        },
+      ]);
+    });
+
+    it("marks an unparseable quantity on its own row and blocks the save", async () => {
+      const submit = renderForm();
+
+      await userEvent.type(screen.getByLabelText("Titel"), "Pasta pesto");
+      await fillFirstRow("ui", "abc", "");
+      await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
+
+      expect(screen.getByText("Hoeveelheid moet een getal zijn")).toBeInTheDocument();
+      expect(submit.calls).toEqual([]);
+    });
+  });
+
+  describe("title length (B2)", () => {
+    it("accepts typing a title over 80 characters, rather than truncating it", async () => {
+      renderForm();
+      const longTitle = "a".repeat(90);
+
+      await userEvent.type(screen.getByLabelText("Titel"), longTitle);
+
+      expect(screen.getByLabelText("Titel")).toHaveValue(longTitle);
+    });
+
+    it("shows the schema's message under the field and blocks the save", async () => {
+      const submit = renderForm();
+
+      await userEvent.type(screen.getByLabelText("Titel"), "a".repeat(90));
+      await fillFirstRow("ui", "", "");
+      await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
+
+      expect(screen.getByText("Titel mag maximaal 80 tekens zijn")).toBeInTheDocument();
+      expect(submit.calls).toEqual([]);
+    });
+  });
+
+  describe("duplicate ingredient names (B3)", () => {
+    it("marks the later row and blocks the save, leaving the first row untouched", async () => {
+      const submit = renderForm();
+
+      await userEvent.type(screen.getByLabelText("Titel"), "Pasta pesto");
+      await fillFirstRow("ui", "", "");
+      await userEvent.click(screen.getByRole("button", { name: "Ingrediënt" }));
+      await userEvent.type(screen.getAllByLabelText("Ingrediëntnaam")[1], "UI");
+      await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
+
+      expect(screen.getByText("Staat al in dit recept")).toBeInTheDocument();
+      expect(submit.calls).toEqual([]);
+    });
+  });
+
+  describe("ingredient-name autocomplete (B4)", () => {
+    const ingredientNames = [{ id: 1, name: "ui" }];
+
+    function renderFormWithIngredients() {
+      const submit = fakeSubmit();
+      render(
+        <RecipeForm
+          pageTitle="Nieuw recept"
+          existingTags={[]}
+          ingredientNames={ingredientNames}
+          onSubmit={submit.onSubmit}
+        />
+      );
+      return submit;
+    }
+
+    it("closes the suggestions on Escape", async () => {
+      renderFormWithIngredients();
+      const nameField = screen.getAllByLabelText("Ingrediëntnaam")[0];
+
+      await userEvent.type(nameField, "u");
+      expect(screen.getByRole("button", { name: "ui" })).toBeInTheDocument();
+
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("button", { name: "ui" })).not.toBeInTheDocument();
+    });
+
+    it("closes the suggestions on blur", async () => {
+      renderFormWithIngredients();
+      const nameField = screen.getAllByLabelText("Ingrediëntnaam")[0];
+
+      await userEvent.type(nameField, "u");
+      expect(screen.getByRole("button", { name: "ui" })).toBeInTheDocument();
+
+      await userEvent.tab();
+      // The suggestion's onMouseDown gets a 150ms window to fire first.
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: "ui" })).not.toBeInTheDocument()
+      );
+    });
+  });
+
+  describe("column labels replace clipped placeholders (B5)", () => {
+    it("shows a header row of column labels instead of placeholder text", () => {
+      renderForm();
+
+      expect(screen.getByText("Ingrediënt", { selector: "span" })).toBeInTheDocument();
+      expect(screen.getByText("Aantal")).toBeInTheDocument();
+      expect(screen.getByText("Eenheid")).toBeInTheDocument();
+      expect(screen.getAllByLabelText("Hoeveelheid")[0]).not.toHaveAttribute("placeholder");
+      expect(screen.getAllByLabelText("Eenheid")[0]).not.toHaveAttribute("placeholder");
+    });
   });
 });

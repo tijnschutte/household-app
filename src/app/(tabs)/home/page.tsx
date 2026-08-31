@@ -12,7 +12,6 @@ import {
   updateGroceryCategory,
   updateGroceryName,
 } from "@/src/lib/house/actions";
-import { getRecipesForListMatch } from "@/src/lib/recepten/data";
 
 // The composition root for the home page: the only place that knows which
 // server action backs each operation the UI offers — and the only place that
@@ -45,10 +44,6 @@ const homeActions: HomeActions = {
   onCreateCategory: async (name, view) => {
     "use server";
     return createCategory(name, isPersonal(view));
-  },
-  onLoadRecipesForMatch: async () => {
-    "use server";
-    return getRecipesForListMatch();
   },
 };
 

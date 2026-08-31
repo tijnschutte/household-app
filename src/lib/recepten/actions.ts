@@ -193,14 +193,23 @@ export async function addRecipeToBasket(recipeId: number) {
           quantity: line.quantity,
           unit: line.unit,
           categoryId: null,
+          sourceRecipeId: recipe.id,
           ...owner,
         },
       })
     ),
+    // Stamped on an update too, and unconditionally: whichever recipe most
+    // recently touched this row — even a hand-typed row that had no recipe
+    // before — is the one the list traces it back to.
     ...update.map((row) =>
       prisma.grocery.update({
         where: { id: row.id },
-        data: { quantity: row.quantity, unit: row.unit, bought: row.bought },
+        data: {
+          quantity: row.quantity,
+          unit: row.unit,
+          bought: row.bought,
+          sourceRecipeId: recipe.id,
+        },
       })
     ),
   ]);

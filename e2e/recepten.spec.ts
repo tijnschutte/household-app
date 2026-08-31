@@ -112,6 +112,16 @@ test("the Recepten story: empty state, create, autocomplete, filter, basket, mat
   await page.getByRole("button", { name: "Ingrediënt", exact: true }).click();
   await page.getByLabel("Ingrediëntnaam").nth(1).fill("basilicum");
 
+  // B5: the column labels ("Ingrediënt", "Aantal", "Eenheid") replace
+  // placeholders that used to clip at 390px — check them at that width, and
+  // keep a screenshot to read by eye.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("span", { hasText: "Ingrediënt" })).toBeVisible();
+  await expect(page.locator("span", { hasText: "Aantal" })).toBeVisible();
+  await expect(page.locator("span", { hasText: "Eenheid" })).toBeVisible();
+  await page.screenshot({ path: "test-results/recepten-390-column-labels.png" });
+  await page.setViewportSize({ width: 420, height: 900 });
+
   await page.getByLabel("Bereiding").fill("Kook de pasta.\n\nMeng met pesto en basilicum.");
 
   await page.getByRole("button", { name: "Opslaan" }).click();
@@ -167,6 +177,7 @@ test("the Recepten story: empty state, create, autocomplete, filter, basket, mat
 
   const tagFilter = page.getByRole("button", { name: "Filter op categorie" });
   await tagFilter.click();
+  await expect(page.getByText("Toont recepten met álle gekozen categorieën")).toBeVisible();
   await page.getByRole("menuitemcheckbox", { name: tagName }).click();
   // Ticking one keeps the menu open for the next; the trigger now reads the selection.
   await expect(page.getByRole("menuitemcheckbox", { name: tagName })).toBeVisible();
@@ -175,8 +186,11 @@ test("the Recepten story: empty state, create, autocomplete, filter, basket, mat
   await expect(page.locator(`a[href="/recepten/${id1}"]`)).toBeVisible();
   await expect(page.locator(`a[href="/recepten/${id2}"]`)).toBeHidden();
 
-  await tagFilter.click();
-  await page.getByRole("menuitem", { name: "Alles tonen" }).click();
+  // D5: the × beside the trigger clears the selection without reopening the menu.
+  const clearFilter = page.getByRole("button", { name: "Filter wissen" });
+  await expect(clearFilter).toBeVisible();
+  await clearFilter.click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(tagFilter).toHaveText("Alle categorieën");
   await expect(page.locator(`a[href="/recepten/${id1}"]`)).toBeVisible();
   await expect(page.locator(`a[href="/recepten/${id2}"]`)).toBeVisible();
@@ -211,9 +225,11 @@ test("the Recepten story: empty state, create, autocomplete, filter, basket, mat
   await page.getByRole("menuitem", { name: "Alles tonen" }).click();
   await expect(tagFilter).toHaveText("Alle categorieën");
 
-  // --- 5. "In mandje", and the merge on /home -----------------------------
+  // --- 5. "In mandje", the merge on /home, and its trace back (D1, D2) ----
   await openRecipe(page, id1);
-  const basketButton = page.locator("footer").getByRole("button", { name: "In mandje" });
+  // "In mandje" while nothing is on the list yet: adds directly, no confirm.
+  const basketButton = page.locator("footer").getByRole("button", { name: /mandje/i });
+  await expect(basketButton).toHaveText("In mandje");
   await basketButton.click();
   await expect(basketButton).toHaveClass(/bg-green-600/);
 
@@ -223,29 +239,49 @@ test("the Recepten story: empty state, create, autocomplete, filter, basket, mat
   });
   await expect(pastaGroceryRow).toBeVisible({ timeout: 30_000 });
   await expect(pastaGroceryRow).toContainText("400 g");
+  // D1: a row a recipe wrote carries the recipe's name under it.
+  await expect(pastaGroceryRow).toContainText(recipe1Title);
   await expect(page.getByRole("button", { name: "basilicum hernoemen" })).toBeVisible();
 
+  // A hand-typed item carries no such trace.
+  await addBarOf(page).fill("boter");
+  await addBarOf(page).press("Enter");
+  const boterRow = page.locator("[data-row-body]", {
+    has: page.getByRole("button", { name: "boter hernoemen" }),
+  });
+  await expect(boterRow).toBeVisible();
+  await expect(boterRow).not.toContainText(recipe1Title);
+
   await openRecipe(page, id1);
+  // The server now knows every ingredient is on the list: the button reads
+  // "Al in mandje" and asks before adding again, rather than just doubling
+  // the quantities silently (D2).
+  await expect(basketButton).toHaveText("Al in mandje");
   await basketButton.click();
+  const reAddDialog = page.getByRole("alertdialog");
+  await expect(reAddDialog.getByText("Nog een keer toevoegen?")).toBeVisible();
+  await reAddDialog.getByRole("button", { name: "Toevoegen" }).click();
   await expect(basketButton).toHaveClass(/bg-green-600/);
 
   await goToMandje(page);
   await expect(page.getByRole("button", { name: "pasta hernoemen" })).toHaveCount(1);
   await expect(pastaGroceryRow).toContainText("800 g");
 
-  // --- 6. the "past bij je lijstje" sheet ---------------------------------
-  await page.getByRole("button", { name: "Past bij je lijstje" }).click();
-  const sheet = page.getByRole("dialog");
-  await expect(sheet.getByText("Past bij je lijstje")).toBeVisible();
+  // --- 6. recipes sharing ingredients, from the ingredient list ------------
+  await openRecipe(page, id1);
+  await expect(page.locator("footer").getByRole("button", { name: "Combineer" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Deelt ingrediënten met andere recepten" }).click();
+  const combineSheet = page.getByRole("dialog");
+  await expect(combineSheet.getByText(`samen met ${recipe1Title} in te kopen`)).toBeVisible();
 
-  const recipe1Row = sheet.locator("li", { hasText: recipe1Title });
-  await expect(recipe1Row).toContainText("2 van 2");
-  const recipe2Row = sheet.locator("li", { hasText: recipe2Title });
-  await expect(recipe2Row).toContainText("1 van 2");
-  await expect(recipe2Row).toContainText("nog:");
+  const recipe2Row = combineSheet.locator("li", { hasText: recipe2Title });
+  await expect(recipe2Row).toContainText("deelt: pasta");
 
-  await recipe1Row.getByRole("link", { name: /Bekijken/ }).click();
-  await page.waitForURL(new RegExp(`/recepten/${id1}$`), { timeout: 30_000 });
+  await recipe2Row.getByRole("link", { name: /Bekijken/ }).click();
+  await page.waitForURL(new RegExp(`/recepten/${id2}$`), { timeout: 30_000 });
+
+  // Back to recipe 1 for the edit/delete story below.
+  await openRecipe(page, id1);
 
   // --- 7. edit ---------------------------------------------------------------
   await page.getByRole("link", { name: "Recept bewerken" }).click();

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import HouseholdClientPage, { type HomeActions } from "./client-page";
-import { aCategory, aGrocery, aViewData } from "@/tests/fixtures/house";
+import { aCategory, aGrocery, aGroceryRow, aViewData } from "@/tests/fixtures/house";
 import { succeeds, fails } from "@/tests/fixtures/household";
 import type { ViewData, ViewKey } from "@/src/lib/house/grocery-view";
 
@@ -38,7 +38,7 @@ function fakeActions({
       created.push([name, view, categoryId]);
       return succeeds(
         "Toegevoegd",
-        aGrocery({ id: 500 + created.length, name, categoryId: categoryId ?? null })
+        aGroceryRow({ id: 500 + created.length, name, categoryId: categoryId ?? null })
       );
     },
     onSetBought: async (id, next) => {
@@ -60,7 +60,6 @@ function fakeActions({
       categoriesDeleted.push(id);
     },
     onCreateCategory: async (name) => succeeds("Categorie aangemaakt", aCategory({ id: 99, name })),
-    onLoadRecipesForMatch: async () => [],
   };
 
   return { actions, created, bought, deleted, restored, renamed, categoriesDeleted, loaded };

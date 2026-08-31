@@ -24,16 +24,9 @@ export type RecipeDetail = {
   instructions: string;
   tags: RecipeTagView[];
   ingredients: RecipeIngredientView[];
+  /** Every ingredient is on the shared list and not yet bought. */
+  onList: boolean;
 };
 
 /** An ingredient name already in the household's vocabulary, for autocomplete. */
 export type IngredientName = { id: number; name: string };
-
-/** How well a recipe matches what's currently on the shared list. */
-export type ListMatch = {
-  recipeId: number;
-  title: string;
-  have: number;
-  total: number;
-  missing: string[];
-};

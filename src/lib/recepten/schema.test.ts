@@ -34,8 +34,8 @@ describe("recipeSchema", () => {
     expect(result.ingredients[0].unit).toBe("gram");
   });
 
-  it("dedupes ingredient lines with the same normalised name, keeping the first", () => {
-    const result = recipeSchema.parse(
+  it("rejects a second ingredient line with the same normalised name", () => {
+    const result = recipeSchema.safeParse(
       aRecipeInput({
         ingredients: [
           { name: "Ui", quantity: 1, unit: null },
@@ -44,16 +44,26 @@ describe("recipeSchema", () => {
       })
     );
 
-    expect(result.ingredients).toHaveLength(1);
-    expect(result.ingredients[0].quantity).toBe(1);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.errors[0]).toMatchObject({
+        message: "Staat al in dit recept",
+        path: ["ingredients", 1, "name"],
+      });
+    }
   });
 
   it("rejects an empty title", () => {
     expect(recipeSchema.safeParse(aRecipeInput({ title: "  " })).success).toBe(false);
   });
 
-  it("rejects a title over 80 characters", () => {
-    expect(recipeSchema.safeParse(aRecipeInput({ title: "a".repeat(81) })).success).toBe(false);
+  it("rejects a title over 80 characters, with the message the form shows under the field", () => {
+    const result = recipeSchema.safeParse(aRecipeInput({ title: "a".repeat(81) }));
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.errors[0].message).toBe("Titel mag maximaal 80 tekens zijn");
+    }
   });
 
   it("rejects instructions over 5000 characters", () => {

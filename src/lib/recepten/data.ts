@@ -37,6 +37,17 @@ export async function getRecipe(id: number): Promise<RecipeDetail | null> {
   });
   if (!recipe) return null;
 
+  // "Al in mandje": every ingredient of this recipe is already on the shared
+  // list and not yet bought. Both Grocery.name and Ingredient.name are stored
+  // trimmed and lowercase (schema.ts, house/actions.ts), so a direct set
+  // lookup is enough — no re-normalising a value that's already normalised.
+  const unbought = await prisma.grocery.findMany({
+    where: { householdId, bought: false },
+    select: { name: true },
+  });
+  const namesOnList = new Set(unbought.map((item) => item.name));
+  const onList = recipe.ingredients.every((line) => namesOnList.has(line.ingredient.name));
+
   return {
     id: recipe.id,
     title: recipe.title,
@@ -47,6 +58,7 @@ export async function getRecipe(id: number): Promise<RecipeDetail | null> {
       quantity: line.quantity === null ? null : Number(line.quantity),
       unit: line.unit,
     })),
+    onList,
   };
 }
 
@@ -74,14 +86,17 @@ export async function getRecipeTags(): Promise<RecipeTagView[]> {
   return tags.map((tag) => ({ id: tag.id, name: tag.name }));
 }
 
-/** Just enough of every recipe for the "past bij je lijstje" match (recepten/list-match.ts). */
-export async function getRecipesForListMatch(): Promise<
-  { id: number; title: string; ingredientNames: string[] }[]
-> {
+/**
+ * Just enough of every other recipe in the household for "Combineer je
+ * boodschappen" (recepten/suggestions.ts) to rank against `excludeRecipeId`.
+ */
+export async function getRecipesForSuggestions(
+  excludeRecipeId: number
+): Promise<{ id: number; title: string; ingredientNames: string[] }[]> {
   const { householdId } = await requireHousehold();
 
   const recipes = await prisma.recipe.findMany({
-    where: { householdId },
+    where: { householdId, NOT: { id: excludeRecipeId } },
     include: { ingredients: { include: { ingredient: true } } },
   });
 

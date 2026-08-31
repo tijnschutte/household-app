@@ -7,6 +7,7 @@ import {
   useFieldArray,
   useForm,
   type Control,
+  type FieldErrors,
   type UseFormRegister,
 } from "react-hook-form";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/src/components/ui/alert-dialog";
 import { recipeSchema, type RecipeInput } from "@/src/lib/recepten/schema";
+import { parseQuantity } from "@/src/lib/recepten/quantity-input";
 import type { IngredientName, RecipeTagView } from "@/src/lib/recepten/view";
 import type { ActionResult } from "@/src/lib/action-result";
 
@@ -64,19 +66,13 @@ function emptyLine(): IngredientFormLine {
   return { name: "", quantity: "", unit: "" };
 }
 
-/** "6,5" or "6.5" -> 6.5; "" -> null; anything unparseable -> NaN, which the schema's positive() rejects. */
-function parseQuantity(raw: string): number | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const value = Number(trimmed.replace(",", "."));
-  return Number.isFinite(value) ? value : NaN;
-}
-
 function IngredientRow({
   index,
   control,
   register,
   ingredientNames,
+  nameError,
+  quantityError,
   onRemove,
   canRemove,
   disabled,
@@ -85,6 +81,8 @@ function IngredientRow({
   control: Control<RecipeFormValues>;
   register: UseFormRegister<RecipeFormValues>;
   ingredientNames: IngredientName[];
+  nameError?: string;
+  quantityError?: string;
   onRemove: () => void;
   canRemove: boolean;
   disabled: boolean;
@@ -92,7 +90,7 @@ function IngredientRow({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-start gap-1.5">
       <Controller
         control={control}
         name={`ingredients.${index}.name`}
@@ -108,15 +106,18 @@ function IngredientRow({
               <Input
                 {...field}
                 onFocus={() => setOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setOpen(false);
+                }}
                 onBlur={() => {
                   field.onBlur();
                   // Give a suggestion's onMouseDown time to fire before the list unmounts.
                   setTimeout(() => setOpen(false), 150);
                 }}
-                placeholder="naam"
                 maxLength={40}
                 disabled={disabled}
                 aria-label="Ingrediëntnaam"
+                aria-invalid={!!nameError}
               />
               {open && query && (matches.length > 0 || !exists) && (
                 <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-card py-1 shadow-lg">
@@ -148,22 +149,24 @@ function IngredientRow({
                   )}
                 </div>
               )}
+              {nameError && <p className="mt-1 text-xs text-destructive">{nameError}</p>}
             </div>
           );
         }}
       />
-      <Input
-        {...register(`ingredients.${index}.quantity`)}
-        inputMode="decimal"
-        placeholder="hoev."
-        maxLength={8}
-        disabled={disabled}
-        aria-label="Hoeveelheid"
-        className="w-16 shrink-0"
-      />
+      <div className="w-16 shrink-0">
+        <Input
+          {...register(`ingredients.${index}.quantity`)}
+          inputMode="decimal"
+          maxLength={8}
+          disabled={disabled}
+          aria-label="Hoeveelheid"
+          aria-invalid={!!quantityError}
+        />
+        {quantityError && <p className="mt-1 text-xs text-destructive">{quantityError}</p>}
+      </div>
       <Input
         {...register(`ingredients.${index}.unit`)}
-        placeholder="eenh."
         maxLength={12}
         disabled={disabled}
         aria-label="Eenheid"
@@ -221,7 +224,14 @@ export default function RecipeForm({
   const [newTagOpen, setNewTagOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
 
-  const { register, control, handleSubmit } = useForm<RecipeFormValues>({
+  const {
+    register,
+    control,
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm<RecipeFormValues>({
     defaultValues: {
       title: initial?.title ?? "",
       instructions: initial?.instructions ?? "",
@@ -253,22 +263,69 @@ export default function RecipeForm({
   };
 
   const onValid = async (values: RecipeFormValues) => {
+    clearErrors();
+
+    // Client-side, row-by-row: an unparseable quantity or a name repeated
+    // from an earlier row is marked on that row and blocks the save, rather
+    // than surfacing as the schema's own error on a field the user can't see
+    // (B1, B3). Only rows with a name typed in count — an untouched blank
+    // row is dropped below, same as before.
+    const activeLines = values.ingredients
+      .map((line, index) => ({ ...line, index }))
+      .filter((line) => line.name.trim() !== "");
+
+    const seenNames = new Set<string>();
+    const parsedIngredients: { name: string; quantity: number | null; unit: string | null }[] = [];
+    let hasFieldError = false;
+
+    for (const line of activeLines) {
+      const parsedQuantity = parseQuantity(line.quantity);
+      if (!parsedQuantity.ok) {
+        setError(`ingredients.${line.index}.quantity`, {
+          type: "manual",
+          message: "Hoeveelheid moet een getal zijn",
+        });
+        hasFieldError = true;
+      }
+
+      const normalizedName = line.name.trim().toLowerCase();
+      if (seenNames.has(normalizedName)) {
+        setError(`ingredients.${line.index}.name`, {
+          type: "manual",
+          message: "Staat al in dit recept",
+        });
+        hasFieldError = true;
+      }
+      seenNames.add(normalizedName);
+
+      parsedIngredients.push({
+        name: line.name,
+        quantity: parsedQuantity.ok ? parsedQuantity.value : null,
+        unit: line.unit.trim() === "" ? null : line.unit,
+      });
+    }
+
+    if (hasFieldError) return;
+
     const draft = {
       title: values.title,
       instructions: values.instructions,
-      ingredients: values.ingredients
-        .filter((line) => line.name.trim() !== "")
-        .map((line) => ({
-          name: line.name,
-          quantity: parseQuantity(line.quantity),
-          unit: line.unit.trim() === "" ? null : line.unit,
-        })),
+      ingredients: parsedIngredients,
       tags: selectedTags,
     };
 
     const validated = recipeSchema.safeParse(draft);
     if (!validated.success) {
-      toast.error(validated.error.errors[0].message);
+      const issue = validated.error.errors[0];
+      // A title that's too long (B2) is shown under the field it belongs to,
+      // same as the two row-level errors above; anything else still reads
+      // as a toast, since there is no other field on screen for it to sit
+      // under (an empty ingredient list, an over-long instructions field).
+      if (issue.path[0] === "title") {
+        setError("title", { type: "manual", message: issue.message });
+      } else {
+        toast.error(issue.message);
+      }
       return;
     }
 
@@ -288,6 +345,8 @@ export default function RecipeForm({
     }
   };
 
+  const ingredientErrors = errors.ingredients as FieldErrors<IngredientFormLine>[] | undefined;
+
   return (
     <div className="flex h-full w-full flex-col">
       <PageHeader title={pageTitle} left={<BackButton />} />
@@ -297,7 +356,13 @@ export default function RecipeForm({
       >
         <div className="space-y-2">
           <Label htmlFor="recipe-title">Titel</Label>
-          <Input id="recipe-title" maxLength={80} disabled={isSaving} {...register("title")} />
+          <Input
+            id="recipe-title"
+            disabled={isSaving}
+            aria-invalid={!!errors.title}
+            {...register("title")}
+          />
+          {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
         </div>
 
         <div className="space-y-2">
@@ -353,6 +418,15 @@ export default function RecipeForm({
 
         <div className="space-y-2">
           <Label>Ingrediënten</Label>
+          {/* Column labels, not placeholders: a placeholder ("hoev.", "eenh.")
+              disappears the moment someone types and clips at 390px width
+              before that (B5). */}
+          <div className="flex items-center gap-1.5 px-0.5 text-xs font-medium text-muted-foreground">
+            <span className="min-w-0 flex-1">Ingrediënt</span>
+            <span className="w-16 shrink-0">Aantal</span>
+            <span className="w-16 shrink-0">Eenheid</span>
+            <span className="h-9 w-9 shrink-0" aria-hidden="true" />
+          </div>
           <div className="space-y-2">
             {fields.map((field, index) => (
               <IngredientRow
@@ -361,6 +435,8 @@ export default function RecipeForm({
                 control={control}
                 register={register}
                 ingredientNames={ingredientNames}
+                nameError={ingredientErrors?.[index]?.name?.message}
+                quantityError={ingredientErrors?.[index]?.quantity?.message}
                 onRemove={() => remove(index)}
                 canRemove={fields.length > 1}
                 disabled={isSaving}

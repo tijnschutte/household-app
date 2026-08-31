@@ -115,6 +115,42 @@ describe("recipes are confined to the caller's household", () => {
   });
 });
 
+describe("getRecipe reports onList (D2)", () => {
+  it("is true once every ingredient is on the shared list and not bought", async () => {
+    const { household, member } = await aHouseholdWith("sam");
+    const recipe = await aRecipe(household.id, "Pasta pesto", [
+      { name: "pasta" },
+      { name: "kaas" },
+    ]);
+    await aGrocery({ householdId: household.id }, { name: "pasta" });
+    await aGrocery({ householdId: household.id }, { name: "kaas" });
+
+    signInAs(member);
+    expect(await getRecipe(recipe.id)).toMatchObject({ onList: true });
+  });
+
+  it("is false while an ingredient is missing from the list", async () => {
+    const { household, member } = await aHouseholdWith("sam");
+    const recipe = await aRecipe(household.id, "Pasta pesto", [
+      { name: "pasta" },
+      { name: "kaas" },
+    ]);
+    await aGrocery({ householdId: household.id }, { name: "pasta" });
+
+    signInAs(member);
+    expect(await getRecipe(recipe.id)).toMatchObject({ onList: false });
+  });
+
+  it("is false while an ingredient on the list is already bought", async () => {
+    const { household, member } = await aHouseholdWith("sam");
+    const recipe = await aRecipe(household.id, "Pasta pesto", [{ name: "pasta" }]);
+    await aGrocery({ householdId: household.id }, { name: "pasta", bought: true });
+
+    signInAs(member);
+    expect(await getRecipe(recipe.id)).toMatchObject({ onList: false });
+  });
+});
+
 describe("createRecipe / updateRecipe reject a duplicate title", () => {
   it("refuses a second recipe with the same title in the same household", async () => {
     const { household, member } = await aHouseholdWith("sam");
@@ -242,5 +278,66 @@ describe("addRecipeToBasket", () => {
 
     await expect(addRecipeToBasket(recipe.id)).rejects.toThrow();
     expect(await db.grocery.count({ where: { householdId: theirs.household.id } })).toBe(0);
+  });
+
+  describe("sourceRecipeId (D1)", () => {
+    it("stamps a newly created row with the recipe that added it", async () => {
+      const { household, member } = await aHouseholdWith("sam");
+      const recipe = await aRecipe(household.id, "Pasta pesto", [{ name: "pasta" }]);
+
+      signInAs(member);
+      await addRecipeToBasket(recipe.id);
+
+      const row = await db.grocery.findFirst({
+        where: { householdId: household.id, name: "pasta" },
+      });
+      expect(row?.sourceRecipeId).toBe(recipe.id);
+    });
+
+    it("stamps an updated row too, even one that started out hand-typed", async () => {
+      const { household, member } = await aHouseholdWith("sam");
+      const handTyped = await aGrocery({ householdId: household.id }, { name: "pasta" });
+      expect(handTyped.sourceRecipeId).toBeNull();
+      const recipe = await aRecipe(household.id, "Pasta pesto", [{ name: "pasta" }]);
+
+      signInAs(member);
+      await addRecipeToBasket(recipe.id);
+
+      const row = await db.grocery.findUnique({ where: { id: handTyped.id } });
+      expect(row?.sourceRecipeId).toBe(recipe.id);
+    });
+
+    it("the latest recipe wins when a second recipe adds the same ingredient", async () => {
+      const { household, member } = await aHouseholdWith("sam");
+      const first = await aRecipe(household.id, "Pasta pesto", [{ name: "pasta" }]);
+      const second = await aRecipe(household.id, "Pasta carbonara", [{ name: "pasta" }]);
+
+      signInAs(member);
+      await addRecipeToBasket(first.id);
+      await addRecipeToBasket(second.id);
+
+      const row = await db.grocery.findFirst({
+        where: { householdId: household.id, name: "pasta" },
+      });
+      expect(row?.sourceRecipeId).toBe(second.id);
+    });
+
+    it("deleting the recipe nulls the trace on the row, but the row stays", async () => {
+      const { household, member } = await aHouseholdWith("sam");
+      const recipe = await aRecipe(household.id, "Pasta pesto", [
+        { name: "pasta", quantity: 200, unit: "gram" },
+      ]);
+
+      signInAs(member);
+      await addRecipeToBasket(recipe.id);
+      await db.recipe.delete({ where: { id: recipe.id } });
+
+      const row = await db.grocery.findFirst({
+        where: { householdId: household.id, name: "pasta" },
+      });
+      expect(row).not.toBeNull();
+      expect(row?.sourceRecipeId).toBeNull();
+      expect(Number(row!.quantity)).toBe(200);
+    });
   });
 });

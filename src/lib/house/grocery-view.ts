@@ -9,9 +9,11 @@ import type { Grocery, Category } from "@prisma/client";
 // Prisma Decimal: only data.ts and actions.ts touch the database type, and
 // they convert before a row ever reaches a client component (see
 // house/data.ts and house/actions.ts).
-export type GroceryWithCategory = Omit<Grocery, "quantity"> & {
+export type GroceryWithCategory = Omit<Grocery, "quantity" | "sourceRecipeId"> & {
   quantity: number | null;
   category: Category | null;
+  /** The recipe that last stamped this row's quantity, for "van {recept}" — null for a hand-typed row. */
+  sourceRecipeTitle: string | null;
 };
 
 /**

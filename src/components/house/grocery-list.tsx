@@ -329,13 +329,22 @@ function DraggableGroceryItem({
         `}
       >
         <CheckCircle bought={bought} />
-        <span
-          className={`truncate flex-1 text-base min-w-0 first-letter:uppercase ${
-            bought ? "text-gray-400 line-through" : "text-gray-800 font-medium"
-          }`}
-        >
-          {item.name}
-        </span>
+        <div className="min-w-0 flex-1">
+          <span
+            className={`block truncate text-base first-letter:uppercase ${
+              bought ? "text-gray-400 line-through" : "text-gray-800 font-medium"
+            }`}
+          >
+            {item.name}
+          </span>
+          {/* The recipe this row's quantity most recently came from — a
+              hand-typed item, or one that predates D1, carries none. */}
+          {item.sourceRecipeTitle && (
+            <span className="block truncate text-xs text-gray-400 first-letter:uppercase">
+              {item.sourceRecipeTitle}
+            </span>
+          )}
+        </div>
         {quantityLabel && (
           <span className="shrink-0 text-sm text-gray-400 tabular-nums">{quantityLabel}</span>
         )}

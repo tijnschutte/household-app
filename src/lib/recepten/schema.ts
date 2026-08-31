@@ -39,27 +39,33 @@ const ingredientLineSchema = z.object({
   unit: unitSchema,
 });
 
-/** Keeps the first line for each normalised name; later duplicates are dropped. */
-function dedupeByName<T extends { name: string }>(lines: T[]): T[] {
+/**
+ * Rejects a second line with the same normalised name rather than silently
+ * dropping it — the form marks the offending row with the same message
+ * (recipe-form.tsx), so this is the server keeping that promise rather than
+ * quietly losing what the user typed.
+ */
+function rejectDuplicateNames(lines: { name: string }[], ctx: z.RefinementCtx): void {
   const seen = new Set<string>();
-  return lines.filter((line) => {
-    if (seen.has(line.name)) return false;
+  lines.forEach((line, index) => {
+    if (seen.has(line.name)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Staat al in dit recept",
+        path: [index, "name"],
+      });
+    }
     seen.add(line.name);
-    return true;
   });
 }
 
 export const recipeSchema = z.object({
-  title: z
-    .string()
-    .trim()
-    .min(1, "Titel is vereist")
-    .max(80, "Titel mag maximaal 80 karakters zijn"),
+  title: z.string().trim().min(1, "Titel is vereist").max(80, "Titel mag maximaal 80 tekens zijn"),
   instructions: z.string().max(5000, "Bereiding mag maximaal 5000 karakters zijn"),
   ingredients: z
     .array(ingredientLineSchema)
     .min(1, "Voeg minstens 1 ingrediënt toe")
-    .transform(dedupeByName),
+    .superRefine(rejectDuplicateNames),
   tags: z.array(
     z
       .string()

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Plus, Search } from "lucide-react";
+import { ChevronDown, Plus, Search, X } from "lucide-react";
 import PageHeader from "@/src/components/page-header";
 import HuisButton from "@/src/components/huis-button";
 import { Button } from "@/src/components/ui/button";
@@ -43,39 +43,59 @@ function TagFilter({
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          className="w-full justify-between font-normal"
-          aria-label="Filter op categorie"
-        >
-          <span className={selected.size === 0 ? "text-muted-foreground" : undefined}>
-            {tagFilterLabel(tags, selected)}
-          </span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-        {tags.map((tag) => (
-          <DropdownMenuCheckboxItem
-            key={tag.id}
-            checked={selected.has(tag.id)}
-            onCheckedChange={() => toggle(tag.id)}
-            // Stay open so several can be ticked in one go.
-            onSelect={(event) => event.preventDefault()}
+    <div className="relative">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            className={`w-full justify-between font-normal ${selected.size > 0 ? "pr-9" : ""}`}
+            aria-label="Filter op categorie"
           >
-            {tag.name}
-          </DropdownMenuCheckboxItem>
-        ))}
-        {selected.size > 0 && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => onChange(new Set())}>Alles tonen</DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <span className={selected.size === 0 ? "text-muted-foreground" : undefined}>
+              {tagFilterLabel(tags, selected)}
+            </span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">
+            Toont recepten met álle gekozen categorieën
+          </p>
+          {tags.map((tag) => (
+            <DropdownMenuCheckboxItem
+              key={tag.id}
+              checked={selected.has(tag.id)}
+              onCheckedChange={() => toggle(tag.id)}
+              // Stay open so several can be ticked in one go.
+              onSelect={(event) => event.preventDefault()}
+            >
+              {tag.name}
+            </DropdownMenuCheckboxItem>
+          ))}
+          {selected.size > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => onChange(new Set())}>Alles tonen</DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {/* Sits over the trigger rather than inside it, so a tap here clears
+          the selection without also opening the menu underneath (D5). */}
+      {selected.size > 0 && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onChange(new Set());
+          }}
+          aria-label="Filter wissen"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -116,6 +116,12 @@ model Grocery {
   userId      Int?
   category    Category?       @relation(fields: [categoryId], references: [id])
   categoryId  Int?
+  // Which recipe last wrote this row's quantity, so the list can show "van
+  // {recept}" under it. Never set for a hand-typed row. SetNull rather than
+  // Cascade: deleting the recipe should not delete groceries someone still
+  // needs to buy — only sever the trace back to where they came from.
+  sourceRecipe   Recipe?      @relation(fields: [sourceRecipeId], references: [id], onDelete: SetNull)
+  sourceRecipeId Int?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @default(now()) @updatedAt
 
@@ -164,6 +170,9 @@ model Recipe {
   updatedAt    DateTime           @default(now()) @updatedAt
   ingredients  RecipeIngredient[]
   tags         RecipeTag[]
+  // Grocery rows this recipe most recently stamped its quantity onto — see
+  // Grocery.sourceRecipeId.
+  groceries    Grocery[]
 
   @@unique([householdId, title])
 }

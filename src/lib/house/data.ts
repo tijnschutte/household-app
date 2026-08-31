@@ -26,7 +26,7 @@ export async function getHomeData(personal: boolean) {
       // Bought items are included too: they render in the collapsed
       // "Afgevinkt" section rather than being hidden.
       where: list,
-      include: { category: true },
+      include: { category: true, sourceRecipe: { select: { title: true } } },
       orderBy: [
         { categoryId: "asc" }, // null values (uncategorized) come first
         { name: "asc" },
@@ -38,9 +38,13 @@ export async function getHomeData(personal: boolean) {
   // Prisma's Decimal is a class instance, which Next's server-action
   // serialization cannot carry across to a Client Component — convert it to
   // a plain number here, at the one place every polled row crosses the wire.
-  const clientItems: GroceryWithCategory[] = items.map((item) => ({
+  // sourceRecipe collapses to its title alone: the screen shows "van
+  // {recept}", never the id, and dependency-cruiser's data.ts rule exists so
+  // a raw relation object never has the chance to leak further than this.
+  const clientItems: GroceryWithCategory[] = items.map(({ sourceRecipe, ...item }) => ({
     ...item,
     quantity: item.quantity === null ? null : Number(item.quantity),
+    sourceRecipeTitle: sourceRecipe?.title ?? null,
   }));
 
   return { items: clientItems, categories };
