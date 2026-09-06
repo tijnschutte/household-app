@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Pencil, ShoppingBasket, Check, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Check, MoreHorizontal, Pencil, Shuffle, ShoppingBasket, Trash2 } from "lucide-react";
 import PageHeader from "@/src/components/page-header";
 import BackButton from "@/src/components/back-button";
 import { Button } from "@/src/components/ui/button";
@@ -17,26 +19,25 @@ import {
   AlertDialogTitle,
 } from "@/src/components/ui/alert-dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/src/components/ui/sheet";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/src/components/ui/dropdown-menu";
+import BasketSheet from "@/src/components/recepten/basket-sheet";
 import { formatQuantity } from "@/src/lib/quantity";
-import { suggestRecipes, type RecipeForSuggestion } from "@/src/lib/recepten/suggestions";
+import { allOnList } from "@/src/lib/recepten/basket";
 import type { RecipeDetail } from "@/src/lib/recepten/view";
 
-type Segment = "ingredienten" | "recept";
-
-/** Confirmed ~2s: long enough to register as feedback, short enough not to strand the button. */
-const CONFIRMATION_MS = 2000;
+type Segment = "ingredienten" | "bereiding";
 
 export type RecipeDetailActions = {
-  onAddToBasket: (recipeId: number) => Promise<void>;
-  onLoadSuggestions: (recipeId: number) => Promise<RecipeForSuggestion[]>;
+  /** Puts the named ingredients on the shared list; rejects when it could not. */
+  onAddToBasket: (recipeId: number, ingredientNames: string[]) => Promise<void>;
+  onDelete: (recipeId: number) => Promise<void>;
 };
 
+/** Left: the ingredients. Right: the method. The same sliding pill as the Mandje's list toggle. */
 function SegmentedControl({
   segment,
   onChange,
@@ -44,7 +45,23 @@ function SegmentedControl({
   segment: Segment;
   onChange: (s: Segment) => void;
 }) {
-  const isRecept = segment === "recept";
+  const isBereiding = segment === "bereiding";
+  const tab = (key: Segment, label: string) => {
+    const on = segment === key;
+    return (
+      <button
+        type="button"
+        role="tab"
+        aria-selected={on}
+        onClick={() => onChange(key)}
+        className={`relative z-10 h-10 flex-1 rounded-md text-sm font-medium transition-colors ${
+          on ? "text-primary" : "text-muted-foreground"
+        }`}
+      >
+        {label}
+      </button>
+    );
+  };
   return (
     <div
       role="tablist"
@@ -54,186 +71,144 @@ function SegmentedControl({
       <span
         aria-hidden
         className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-card shadow-sm transition-transform duration-200 ease-out"
-        style={{ transform: isRecept ? "translateX(100%)" : "translateX(0)" }}
+        style={{ transform: isBereiding ? "translateX(100%)" : "translateX(0)" }}
       />
-      <button
-        type="button"
-        role="tab"
-        aria-selected={!isRecept}
-        onClick={() => onChange("ingredienten")}
-        className={`relative z-10 h-11 flex-1 rounded-md text-sm font-medium transition-colors ${
-          !isRecept ? "text-primary" : "text-muted-foreground"
-        }`}
-      >
-        Ingrediënten
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={isRecept}
-        onClick={() => onChange("recept")}
-        className={`relative z-10 h-11 flex-1 rounded-md text-sm font-medium transition-colors ${
-          isRecept ? "text-primary" : "text-muted-foreground"
-        }`}
-      >
-        Recept
-      </button>
+      {tab("ingredienten", "Ingrediënten")}
+      {tab("bereiding", "Bereiding")}
     </div>
   );
 }
 
-/**
- * A paragraph has no id of its own, so its position in the instructions text
- * stands in for one: unique among siblings even when two paragraphs read the
- * same, and stable for as long as the text is.
- */
-type Paragraph = { offset: number; text: string };
-
-function paragraphs(instructions: string): Paragraph[] {
-  const result: Paragraph[] = [];
-  let offset = 0;
-  // The capturing group keeps the separators in the output, so the offset
-  // stays right without knowing how many blank lines sat between paragraphs.
-  for (const piece of instructions.split(/(\n\s*\n)/)) {
-    const text = piece.trim();
-    if (text) result.push({ offset, text });
-    offset += piece.length;
-  }
-  return result;
+function Ingredients({ recipe }: { recipe: RecipeDetail }) {
+  const unbought = new Set(recipe.listRows.flatMap((row) => (row.bought ? [] : [row.name])));
+  return (
+    <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+      {recipe.ingredients.map((line) => (
+        <li key={line.name} className="flex min-h-12 items-center gap-2.5 px-3.5 py-2.5">
+          <span className="w-20 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+            {formatQuantity(line.quantity, line.unit)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[15px] first-letter:uppercase">
+            {line.name}
+          </span>
+          {unbought.has(line.name) && (
+            <span className="shrink-0 text-xs text-primary">in mandje</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
-/**
- * Other recipes worth shopping for in the same trip, because they share
- * ingredients with this one. Reached from the ingredient list itself rather
- * than a button of its own — see suggestions.ts for the ranking.
- */
-function SharedIngredientsSheet({
-  open,
-  onOpenChange,
-  recipe,
-  onLoadSuggestions,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  recipe: RecipeDetail;
-  onLoadSuggestions: (recipeId: number) => Promise<RecipeForSuggestion[]>;
-}) {
-  const [others, setOthers] = useState<RecipeForSuggestion[] | null>(null);
+/** The method, one step per row. A tap ticks a step off, so a cook can find their place again. */
+function Steps({ steps }: { steps: string[] }) {
+  const [done, setDone] = useState<Set<number>>(new Set());
 
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    onLoadSuggestions(recipe.id)
-      .then((loaded) => {
-        if (!cancelled) setOthers(loaded);
-      })
-      .catch((error) => {
-        console.error("Failed to load recipe suggestions:", error);
-        if (!cancelled) setOthers([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, recipe.id, onLoadSuggestions]);
+  if (steps.length === 0) {
+    return <p className="py-4 text-center text-sm text-muted-foreground">Nog geen bereiding.</p>;
+  }
 
-  const suggestions = useMemo(() => {
-    if (others === null) return null;
-    const self = {
-      id: recipe.id,
-      title: recipe.title,
-      ingredientNames: recipe.ingredients.map((i) => i.name),
-    };
-    return suggestRecipes(self, others);
-  }, [others, recipe]);
+  const toggle = (index: number) =>
+    setDone((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+
+  // Two steps may read the same, so the text alone is not a key; its
+  // occurrence count makes it one.
+  const seen = new Map<string, number>();
+  const keyFor = (step: string) => {
+    const n = (seen.get(step) ?? 0) + 1;
+    seen.set(step, n);
+    return `${step}#${n}`;
+  };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex h-[75vh] flex-col gap-0 overflow-hidden">
-        <SheetHeader>
-          <SheetTitle>Deelt ingrediënten met</SheetTitle>
-          <SheetDescription>Recepten om samen met {recipe.title} in te kopen</SheetDescription>
-        </SheetHeader>
-        <div className="flex-1 overflow-y-auto py-2">
-          {suggestions === null ? (
-            <p className="py-4 text-sm text-muted-foreground">Laden…</p>
-          ) : suggestions.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">
-              Nog geen recept dat ingrediënten deelt met dit recept
-            </p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {suggestions.map((suggestion) => (
-                <li
-                  key={suggestion.recipeId}
-                  className="flex items-center justify-between gap-3 py-3"
+    <div className="space-y-3">
+      <ol className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+        {steps.map((step, index) => {
+          const isDone = done.has(index);
+          return (
+            <li key={keyFor(step)}>
+              <button
+                type="button"
+                aria-pressed={isDone}
+                onClick={() => toggle(index)}
+                className="flex w-full items-start gap-3.5 px-3.5 py-3.5 text-left"
+              >
+                <span
+                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold transition-colors ${
+                    isDone ? "bg-primary text-primary-foreground" : "bg-secondary text-primary"
+                  }`}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium first-letter:uppercase">
-                      {suggestion.title}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      deelt: {suggestion.shared.join(", ")}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/recepten/${suggestion.recipeId}`}
-                    className="shrink-0 text-sm font-medium text-primary"
-                  >
-                    Bekijken ›
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+                  {isDone ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : index + 1}
+                </span>
+                <p className={`pt-0.5 text-base leading-relaxed ${isDone ? "text-gray-400" : ""}`}>
+                  {step}
+                </p>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="text-center text-xs text-muted-foreground">
+        Tik een stap aan om hem af te vinken
+      </p>
+    </div>
   );
 }
 
 export default function RecipeDetailClient({
   recipe,
   onAddToBasket,
-  onLoadSuggestions,
+  onDelete,
 }: { recipe: RecipeDetail } & RecipeDetailActions) {
+  const router = useRouter();
   const [segment, setSegment] = useState<Segment>("ingredienten");
-  const [basketState, setBasketState] = useState<"idle" | "pending" | "done">("idle");
-  // The server already knew the answer at render time (recipe.onList); this
-  // only tracks what happened since, so "Al in mandje" doesn't need a refetch
-  // to appear once the flash ends.
-  const [wasAdded, setWasAdded] = useState(false);
-  const [confirmReAddOpen, setConfirmReAddOpen] = useState(false);
-  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  // Stays true after a successful delete: the screen is navigating away, and
+  // the button must not re-arm in the gap.
+  const [deleted, setDeleted] = useState(false);
 
-  const alreadyOnList = recipe.onList || wasAdded;
-  const instructionParagraphs = paragraphs(recipe.instructions);
+  const onList = allOnList(
+    recipe.ingredients.map((line) => line.name),
+    recipe.listRows
+  );
 
-  const runAddToBasket = async () => {
-    setBasketState("pending");
+  const addToBasket = async (names: string[]) => {
     try {
-      await onAddToBasket(recipe.id);
-      setBasketState("done");
-      setWasAdded(true);
-      setTimeout(() => setBasketState("idle"), CONFIRMATION_MS);
+      await onAddToBasket(recipe.id, names);
     } catch (error) {
       console.error("Failed to add recipe to basket:", error);
-      setBasketState("idle");
+      toast.error("Toevoegen mislukt");
+      return false;
     }
+    toast.success(
+      names.length === 1 ? "1 item in je mandje" : `${names.length} items in je mandje`
+    );
+    // The server knows the list's new state; re-render from it rather than
+    // guessing which rows changed.
+    router.refresh();
+    return true;
   };
 
-  const handleBasketClick = () => {
-    // Already on the list: ask first, since tapping again would double the
-    // quantities rather than just re-confirming what's already there (D2).
-    if (alreadyOnList) {
-      setConfirmReAddOpen(true);
-      return;
+  const deleteRecipe = async () => {
+    setIsDeleting(true);
+    try {
+      await onDelete(recipe.id);
+      setDeleted(true);
+      router.push("/recepten");
+    } catch (error) {
+      console.error("Failed to delete recipe:", error);
+      toast.error("Verwijderen mislukt");
+      setConfirmDeleteOpen(false);
+    } finally {
+      setIsDeleting(false);
     }
-    runAddToBasket();
-  };
-
-  const handleConfirmReAdd = () => {
-    setConfirmReAddOpen(false);
-    runAddToBasket();
   };
 
   return (
@@ -242,103 +217,82 @@ export default function RecipeDetailClient({
         title="Recepten"
         left={<BackButton />}
         right={
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
-          >
-            <Link href={`/recepten/${recipe.id}/bewerken`} aria-label="Recept bewerken">
-              <Pencil className="h-5 w-5" />
-            </Link>
-          </Button>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Meer"
+                className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
+              >
+                <MoreHorizontal className="h-6 w-6" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-44 rounded-xl p-1.5">
+              <DropdownMenuItem asChild className="rounded-lg py-2.5">
+                <Link href={`/recepten/${recipe.id}/bewerken`}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Bewerken
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setConfirmDeleteOpen(true)}
+                className="rounded-lg py-2.5 text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Verwijderen
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         }
       />
 
-      <main className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        <h1 className="text-xl font-bold first-letter:uppercase">{recipe.title}</h1>
-
-        {recipe.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {recipe.tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="rounded-full bg-secondary px-3 py-1.5 text-sm text-muted-foreground"
-              >
-                {tag.name}
-              </span>
-            ))}
-          </div>
-        )}
+      <main className="mx-auto w-full max-w-2xl flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        <div>
+          <h1 className="text-2xl font-bold leading-tight first-letter:uppercase">
+            {recipe.title}
+          </h1>
+          {recipe.tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {recipe.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-primary"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         <SegmentedControl segment={segment} onChange={setSegment} />
 
         {segment === "ingredienten" ? (
-          <div className="space-y-4">
-            <ul className="divide-y divide-border">
-              {recipe.ingredients.map((ingredient) => {
-                const label = formatQuantity(ingredient.quantity, ingredient.unit);
-                return (
-                  <li
-                    key={ingredient.name}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <span className="min-w-0 truncate first-letter:uppercase">
-                      {ingredient.name}
-                    </span>
-                    {label && (
-                      <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
-                        {label}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            <button
-              type="button"
-              onClick={() => setSuggestOpen(true)}
-              className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors active:bg-accent"
-            >
-              Deelt ingrediënten met andere recepten
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
+          <Ingredients recipe={recipe} />
         ) : (
-          <div className="space-y-4">
-            {instructionParagraphs.length > 0 ? (
-              instructionParagraphs.map((paragraph) => (
-                <p key={paragraph.offset} className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {paragraph.text}
-                </p>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">Geen bereiding toegevoegd.</p>
-            )}
-          </div>
+          <Steps steps={recipe.steps} />
         )}
       </main>
 
       <footer className="w-full shrink-0 border-t border-border bg-background px-4 py-3">
-        <div className="mx-auto flex w-full max-w-2xl gap-2">
+        <div className="mx-auto flex w-full max-w-2xl gap-2.5">
+          <Button asChild variant="outline" className="h-12 shrink-0 gap-2 px-4 text-[15px]">
+            <Link href={`/recepten/${recipe.id}/lijkt-op`}>
+              <Shuffle className="h-5 w-5" data-icon="inline-start" />
+              Lijkt op
+            </Link>
+          </Button>
           <Button
             type="button"
-            onClick={handleBasketClick}
-            disabled={basketState === "pending"}
-            variant={basketState !== "done" && alreadyOnList ? "outline" : "default"}
-            className={`h-12 flex-1 gap-2 ${
-              basketState === "done" ? "bg-green-600 text-white hover:bg-green-600" : ""
-            }`}
+            onClick={() => setSheetOpen(true)}
+            variant={onList ? "secondary" : "default"}
+            className="h-12 flex-1 gap-2 text-[15px]"
           >
-            {basketState === "done" ? (
+            {onList ? (
               <>
                 <Check className="h-5 w-5" data-icon="inline-start" />
-                In mandje
-              </>
-            ) : alreadyOnList ? (
-              <>
-                <Check className="h-5 w-5" data-icon="inline-start" />
-                Al in mandje
+                Op de lijst
               </>
             ) : (
               <>
@@ -350,27 +304,35 @@ export default function RecipeDetailClient({
         </div>
       </footer>
 
-      <AlertDialog open={confirmReAddOpen} onOpenChange={setConfirmReAddOpen}>
+      <BasketSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        ingredients={recipe.ingredients}
+        listRows={recipe.listRows}
+        onConfirm={addToBasket}
+      />
+
+      <AlertDialog
+        open={confirmDeleteOpen}
+        onOpenChange={(next) => !isDeleting && !deleted && setConfirmDeleteOpen(next)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Nog een keer toevoegen?</AlertDialogTitle>
-            <AlertDialogDescription>
-              De hoeveelheden worden bij elkaar opgeteld.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{recipe.title} verwijderen?</AlertDialogTitle>
+            <AlertDialogDescription>Dit kan niet ongedaan worden gemaakt.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuleren</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmReAdd}>Toevoegen</AlertDialogAction>
+            <AlertDialogCancel disabled={isDeleting || deleted}>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={deleteRecipe}
+              disabled={isDeleting || deleted}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting || deleted ? "Bezig..." : "Verwijderen"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <SharedIngredientsSheet
-        open={suggestOpen}
-        onOpenChange={setSuggestOpen}
-        recipe={recipe}
-        onLoadSuggestions={onLoadSuggestions}
-      />
     </div>
   );
 }

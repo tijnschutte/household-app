@@ -1,47 +1,184 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { useFieldArray, useForm, type FieldErrors } from "react-hook-form";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import PageHeader from "@/src/components/page-header";
-import BackButton from "@/src/components/back-button";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
-import { Label } from "@/src/components/ui/label";
-import { Textarea } from "@/src/components/ui/textarea";
-import IngredientRow from "@/src/components/recepten/ingredient-row";
+import IngredientNameInput from "@/src/components/recepten/ingredient-name-input";
+import StepEditor from "@/src/components/recepten/step-editor";
 import TagPicker from "@/src/components/recepten/tag-picker";
-import DeleteRecipe from "@/src/components/recepten/delete-recipe";
+import { formatQuantity } from "@/src/lib/quantity";
 import { recipeSchema, type RecipeInput } from "@/src/lib/recepten/schema";
 import {
-  emptyLine,
-  parseIngredientLines,
-  toFormLines,
-  type IngredientFormLine,
-  type RecipeFormValues,
+  emptyDraft,
+  parseDraft,
+  withTrailingBlank,
+  type DraftError,
+  type IngredientDraft,
 } from "@/src/lib/recepten/recipe-form-lines";
-import type { IngredientName, RecipeTagView } from "@/src/lib/recepten/view";
+import type { IngredientName, RecipeIngredientView, RecipeTagView } from "@/src/lib/recepten/view";
 import type { ActionResult } from "@/src/lib/action-result";
 
 /**
  * What this form can do, owned here rather than imported from the action
  * module: the server page passes createRecipe/updateRecipe in (already
  * translated to this shape), and a test passes a fake. Keeps Prisma out of
- * anything that renders this. Only the edit page passes onDelete.
+ * anything that renders this.
  */
 export type RecipeFormActions = {
   onSubmit: (input: RecipeInput) => Promise<ActionResult<{ id: number }>>;
-  onDelete?: () => Promise<void>;
 };
 
 export type RecipeFormInitial = {
   title: string;
-  instructions: string;
+  steps: string[];
   tags: { id: number; name: string }[];
-  ingredients: { name: string; quantity: number | null; unit: string | null }[];
+  ingredients: RecipeIngredientView[];
 };
+
+function SectionHeading({ title, count }: { title: string; count: string }) {
+  return (
+    <h2 className="flex items-center justify-between px-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {title}
+      <span className="font-medium normal-case tracking-normal">{count}</span>
+    </h2>
+  );
+}
+
+/**
+ * The lines already on the recipe and the row that adds the next one. A line
+ * is fixed once added — to change it, remove it and type it again — which
+ * keeps every rule about a line (recipe-form-lines.ts) at the one moment it
+ * is entered.
+ */
+function IngredientsSection({
+  lines,
+  onChange,
+  ingredientNames,
+  disabled,
+}: {
+  lines: RecipeIngredientView[];
+  onChange: (next: RecipeIngredientView[]) => void;
+  ingredientNames: IngredientName[];
+  disabled: boolean;
+}) {
+  const [draft, setDraft] = useState<IngredientDraft>(emptyDraft);
+  const [error, setError] = useState<DraftError | null>(null);
+  const quantityRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  const add = () => {
+    const result = parseDraft(draft, lines);
+    if (!result.ok) {
+      setError(result.error);
+      (result.error.field === "quantity" ? quantityRef : nameRef).current?.focus();
+      return;
+    }
+    onChange([...lines, result.line]);
+    setDraft(emptyDraft());
+    setError(null);
+    quantityRef.current?.focus();
+  };
+
+  const onEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      add();
+    }
+  };
+
+  const edit = (field: keyof IngredientDraft) => (value: string) => {
+    setDraft((prev) => ({ ...prev, [field]: value }));
+    setError(null);
+  };
+
+  return (
+    <section className="space-y-2">
+      <SectionHeading title="Ingrediënten" count={String(lines.length)} />
+      {lines.length > 0 && (
+        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          {lines.map((line) => (
+            <li key={line.name} className="flex min-h-12 items-center gap-2.5 py-1 pl-3.5 pr-2">
+              <span className="w-20 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+                {formatQuantity(line.quantity, line.unit)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[15px] first-letter:uppercase">
+                {line.name}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onChange(lines.filter((l) => l !== line))}
+                disabled={disabled}
+                aria-label={`${line.name} verwijderen`}
+                className="h-9 w-9 text-gray-400 hover:text-destructive"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-1.5">
+        <Input
+          ref={quantityRef}
+          value={draft.quantity}
+          onChange={(e) => edit("quantity")(e.target.value)}
+          onKeyDown={onEnter}
+          inputMode="decimal"
+          maxLength={8}
+          disabled={disabled}
+          placeholder="1"
+          aria-label="Aantal"
+          aria-invalid={error?.field === "quantity"}
+          className="h-12 w-14 shrink-0 px-1 text-center"
+        />
+        <Input
+          value={draft.unit}
+          onChange={(e) => edit("unit")(e.target.value)}
+          onKeyDown={onEnter}
+          maxLength={12}
+          disabled={disabled}
+          placeholder="eenheid"
+          aria-label="Eenheid"
+          className="h-12 w-[92px] shrink-0 px-2.5"
+        />
+        <IngredientNameInput
+          value={draft.name}
+          onChange={edit("name")}
+          onEnter={add}
+          ingredientNames={ingredientNames}
+          inputRef={nameRef}
+          disabled={disabled}
+          invalid={error?.field === "name"}
+        />
+        <Button
+          type="button"
+          size="icon"
+          onClick={add}
+          disabled={disabled}
+          aria-label="Ingrediënt toevoegen"
+          className="h-12 w-12 shrink-0"
+        >
+          <Plus />
+        </Button>
+      </div>
+      {error ? (
+        <p className="px-0.5 text-xs text-destructive">{error.message}</p>
+      ) : (
+        <p className="flex gap-1.5 px-0.5 text-xs text-muted-foreground">
+          <span className="w-14 text-center">aantal</span>
+          <span className="w-[92px] text-center">eenheid</span>
+          <span>ingrediënt</span>
+        </p>
+      )}
+    </section>
+  );
+}
 
 export default function RecipeForm({
   pageTitle,
@@ -49,7 +186,6 @@ export default function RecipeForm({
   existingTags,
   ingredientNames,
   onSubmit,
-  onDelete,
 }: {
   pageTitle: string;
   initial?: RecipeFormInitial;
@@ -58,58 +194,21 @@ export default function RecipeForm({
 } & RecipeFormActions) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
-  const [selectedTags, setSelectedTags] = useState<string[]>(
-    () => initial?.tags.map((tag) => tag.name) ?? []
-  );
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [tags, setTags] = useState<string[]>(() => initial?.tags.map((tag) => tag.name) ?? []);
+  const [lines, setLines] = useState<RecipeIngredientView[]>(initial?.ingredients ?? []);
+  const [steps, setSteps] = useState<string[]>(() => withTrailingBlank(initial?.steps ?? []));
 
-  const {
-    register,
-    control,
-    handleSubmit,
-    setError,
-    clearErrors,
-    formState: { errors },
-  } = useForm<RecipeFormValues>({
-    defaultValues: {
-      title: initial?.title ?? "",
-      instructions: initial?.instructions ?? "",
-      ingredients: toFormLines(initial?.ingredients ?? []),
-    },
-  });
-  const { fields, append, remove } = useFieldArray({ control, name: "ingredients" });
-
-  const onValid = async (values: RecipeFormValues) => {
-    clearErrors();
-
-    // Row-level errors are pinned to the row they belong to and block the
-    // save, rather than surfacing as the schema's own error on a field the
-    // user can't see (B1, B3).
-    const lines = parseIngredientLines(values.ingredients);
-    for (const lineError of lines.errors) {
-      setError(`ingredients.${lineError.index}.${lineError.field}`, {
-        type: "manual",
-        message: lineError.message,
-      });
-    }
-    if (lines.errors.length > 0) return;
-
-    const validated = recipeSchema.safeParse({
-      title: values.title,
-      instructions: values.instructions,
-      ingredients: lines.ingredients,
-      tags: selectedTags,
-    });
+  const save = async () => {
+    const validated = recipeSchema.safeParse({ title, steps, ingredients: lines, tags });
     if (!validated.success) {
       const issue = validated.error.errors[0];
-      // A title that's too long (B2) is shown under its field, like the row
-      // errors above; anything else still reads as a toast, since there is no
-      // other field on screen for it to sit under (an empty ingredient list,
-      // an over-long instructions field).
-      if (issue.path[0] === "title") {
-        setError("title", { type: "manual", message: issue.message });
-      } else {
-        toast.error(issue.message);
-      }
+      // A bad title is shown under its field; anything else reads as a toast,
+      // since there is no field on screen for it to sit under (an empty
+      // ingredient list, an over-long step).
+      if (issue.path[0] === "title") setTitleError(issue.message);
+      else toast.error(issue.message);
       return;
     }
 
@@ -129,98 +228,82 @@ export default function RecipeForm({
     }
   };
 
-  const ingredientErrors = errors.ingredients as FieldErrors<IngredientFormLine>[] | undefined;
-
   return (
     <div className="flex h-full w-full flex-col">
-      <PageHeader title={pageTitle} left={<BackButton />} />
-      <form
-        onSubmit={handleSubmit(onValid)}
-        className="mx-auto w-full max-w-2xl flex-1 space-y-6 overflow-y-auto px-4 py-4"
-      >
-        <div className="space-y-2">
-          <Label htmlFor="recipe-title">Titel</Label>
-          <Input
-            id="recipe-title"
-            disabled={isSaving}
-            aria-invalid={!!errors.title}
-            {...register("title")}
-          />
-          {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
-        </div>
-
-        <div className="space-y-2">
-          <Label>Categorieën</Label>
-          <TagPicker
-            existingTags={existingTags}
-            selected={selectedTags}
-            onChange={setSelectedTags}
-            disabled={isSaving}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Ingrediënten</Label>
-          {/* Column labels, not placeholders: a placeholder ("hoev.", "eenh.")
-              disappears the moment someone types and clips at 390px width
-              before that (B5). */}
-          <div className="flex items-center gap-1.5 px-0.5 text-xs font-medium text-muted-foreground">
-            <span className="min-w-0 flex-1">Ingrediënt</span>
-            <span className="w-16 shrink-0">Aantal</span>
-            <span className="w-16 shrink-0">Eenheid</span>
-            <span className="h-9 w-9 shrink-0" aria-hidden="true" />
-          </div>
-          <div className="space-y-2">
-            {fields.map((field, index) => (
-              <IngredientRow
-                key={field.id}
-                index={index}
-                control={control}
-                register={register}
-                ingredientNames={ingredientNames}
-                nameError={ingredientErrors?.[index]?.name?.message}
-                quantityError={ingredientErrors?.[index]?.quantity?.message}
-                onRemove={() => remove(index)}
-                canRemove={fields.length > 1}
-                disabled={isSaving}
-              />
-            ))}
-          </div>
+      <PageHeader
+        title={pageTitle}
+        left={
           <Button
             type="button"
             variant="ghost"
-            onClick={() => append(emptyLine())}
+            size="icon"
+            aria-label="Annuleren"
             disabled={isSaving}
-            className="h-10 w-full justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-normal text-muted-foreground"
+            onClick={() => router.back()}
+            className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
           >
-            <Plus className="h-4 w-4" data-icon="inline-start" />
-            Ingrediënt
+            <X className="h-6 w-6" />
           </Button>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="recipe-instructions">Bereiding</Label>
-          <Textarea
-            id="recipe-instructions"
-            rows={8}
-            maxLength={5000}
+        }
+        right={
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={save}
             disabled={isSaving}
-            {...register("instructions")}
+            className="h-10 shrink-0 px-2 text-[15px] text-primary-foreground hover:bg-white/10 active:bg-white/20"
+          >
+            {isSaving ? "Bezig…" : "Bewaar"}
+          </Button>
+        }
+        // Wide enough for the word, so the title stays centred against the ×.
+        rightWidth="wide"
+      />
+
+      <main className="mx-auto w-full max-w-2xl flex-1 space-y-6 overflow-y-auto px-4 py-4">
+        <div className="space-y-3">
+          <div>
+            <input
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setTitleError(null);
+              }}
+              maxLength={80}
+              disabled={isSaving}
+              placeholder="Naam van het gerecht"
+              aria-label="Titel"
+              aria-invalid={titleError !== null}
+              className="w-full border-b-[1.5px] border-border bg-transparent px-0.5 pb-2 pt-1 text-2xl font-bold outline-none placeholder:text-gray-400 focus:border-primary"
+            />
+            {titleError && <p className="mt-1 text-xs text-destructive">{titleError}</p>}
+          </div>
+          <TagPicker
+            existingTags={existingTags}
+            selected={tags}
+            onChange={setTags}
+            disabled={isSaving}
           />
         </div>
 
-        <Button type="submit" disabled={isSaving} className="w-full">
-          {isSaving ? "Opslaan..." : "Opslaan"}
-        </Button>
+        <IngredientsSection
+          lines={lines}
+          onChange={setLines}
+          ingredientNames={ingredientNames}
+          disabled={isSaving}
+        />
 
-        {onDelete && (
-          <DeleteRecipe
-            title={initial?.title ?? "Recept"}
-            onDelete={onDelete}
-            disabled={isSaving}
+        <section className="space-y-2">
+          <SectionHeading
+            title="Bereiding"
+            count={`${steps.length - 1} ${steps.length - 1 === 1 ? "stap" : "stappen"}`}
           />
-        )}
-      </form>
+          <StepEditor steps={steps} onChange={setSteps} disabled={isSaving} />
+          <p className="px-0.5 text-xs text-muted-foreground">
+            Enter maakt een nieuwe stap. Laat de laatste leeg als je klaar bent.
+          </p>
+        </section>
+      </main>
     </div>
   );
 }

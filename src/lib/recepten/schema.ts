@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { canonicalUnit } from "@/src/lib/recepten/units";
 
 /**
- * What the server accepts for a recipe: title, instructions, at least one
- * ingredient line, and any number of tags. Shared by the form (client-side
- * safeParse, mirroring signUpSchema's pattern) and the action that writes it.
+ * What the server accepts for a recipe: title, steps, at least one ingredient
+ * line, and any number of tags. Shared by the form (client-side safeParse,
+ * mirroring signUpSchema's pattern) and the action that writes it.
  *
  * Ingredient names are normalised (trimmed, lowercased) here rather than left
  * to the caller — that's the same string `getIngredientNames` reads back and
@@ -25,8 +26,8 @@ const unitSchema = z
   .string()
   .trim()
   .max(12, "Eenheid mag maximaal 12 karakters zijn")
-  .transform((value) => value.toLowerCase())
-  .nullable();
+  .nullable()
+  .transform(canonicalUnit);
 
 const ingredientLineSchema = z.object({
   name: z
@@ -41,9 +42,9 @@ const ingredientLineSchema = z.object({
 
 /**
  * Rejects a second line with the same normalised name rather than silently
- * dropping it — the form marks the offending row with the same message
- * (recipe-form.tsx), so this is the server keeping that promise rather than
- * quietly losing what the user typed.
+ * dropping it — the form refuses the same line when it is typed
+ * (recipe-form-lines.ts), so this is the server keeping that promise rather
+ * than quietly losing what the user typed.
  */
 function rejectDuplicateNames(lines: { name: string }[], ctx: z.RefinementCtx): void {
   const seen = new Set<string>();
@@ -59,9 +60,22 @@ function rejectDuplicateNames(lines: { name: string }[], ctx: z.RefinementCtx): 
   });
 }
 
+export const MAX_STEPS = 50;
+export const MAX_STEP_LENGTH = 1000;
+
+/**
+ * A blank step is dropped rather than rejected: the form always offers one
+ * empty row to type the next step into, and leaving it empty is how someone
+ * says they are done.
+ */
+const stepsSchema = z
+  .array(z.string().trim().max(MAX_STEP_LENGTH, "Een stap mag maximaal 1000 tekens zijn"))
+  .transform((steps) => steps.filter((step) => step !== ""))
+  .pipe(z.array(z.string()).max(MAX_STEPS, "Maximaal 50 stappen"));
+
 export const recipeSchema = z.object({
   title: z.string().trim().min(1, "Titel is vereist").max(80, "Titel mag maximaal 80 tekens zijn"),
-  instructions: z.string().max(5000, "Bereiding mag maximaal 5000 karakters zijn"),
+  steps: stepsSchema,
   ingredients: z
     .array(ingredientLineSchema)
     .min(1, "Voeg minstens 1 ingrediënt toe")

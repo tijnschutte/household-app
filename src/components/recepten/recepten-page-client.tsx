@@ -2,104 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Plus, Search, X } from "lucide-react";
+import { ChevronRight, Plus, Search } from "lucide-react";
 import PageHeader from "@/src/components/page-header";
 import HuisButton from "@/src/components/huis-button";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/src/components/ui/dropdown-menu";
+import TagChips from "@/src/components/recepten/tag-chips";
 import { filterRecipes } from "@/src/lib/recepten/search";
 import type { RecipeSummary, RecipeTagView } from "@/src/lib/recepten/view";
 
-/** The trigger reads as the selection itself, so the filter is visible without opening it. */
-function tagFilterLabel(tags: RecipeTagView[], selected: Set<number>): string {
-  const names: string[] = [];
-  for (const tag of tags) {
-    if (selected.has(tag.id)) names.push(tag.name);
-  }
-  if (names.length === 0) return "Alle categorieën";
-  if (names.length <= 2) return names.join(", ");
-  return `${names.length} categorieën`;
-}
-
-function TagFilter({
-  tags,
-  selected,
-  onChange,
-}: {
-  tags: RecipeTagView[];
-  selected: Set<number>;
-  onChange: (next: Set<number>) => void;
-}) {
-  const toggle = (id: number) => {
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    onChange(next);
-  };
-
-  return (
-    <div className="relative">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            className={`w-full justify-between font-normal ${selected.size > 0 ? "pr-9" : ""}`}
-            aria-label="Filter op categorie"
-          >
-            <span className={selected.size === 0 ? "text-muted-foreground" : undefined}>
-              {tagFilterLabel(tags, selected)}
-            </span>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            Toont recepten met álle gekozen categorieën
-          </p>
-          {tags.map((tag) => (
-            <DropdownMenuCheckboxItem
-              key={tag.id}
-              checked={selected.has(tag.id)}
-              onCheckedChange={() => toggle(tag.id)}
-              // Stay open so several can be ticked in one go.
-              onSelect={(event) => event.preventDefault()}
-            >
-              {tag.name}
-            </DropdownMenuCheckboxItem>
-          ))}
-          {selected.size > 0 && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => onChange(new Set())}>Alles tonen</DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {/* Sits over the trigger rather than inside it, so a tap here clears
-          the selection without also opening the menu underneath (D5). */}
-      {selected.size > 0 && (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onChange(new Set());
-          }}
-          aria-label="Filter wissen"
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      )}
-    </div>
-  );
+function pluralize(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function EmptyState({ hasRecipes }: { hasRecipes: boolean }) {
@@ -109,9 +22,46 @@ function EmptyState({ hasRecipes }: { hasRecipes: boolean }) {
         {hasRecipes ? "Geen recepten gevonden" : "Nog geen recepten"}
       </p>
       {!hasRecipes && (
-        <p className="max-w-xs text-sm">Voeg je eerste recept toe met de knop rechtsonder.</p>
+        <p className="max-w-xs text-sm">Voeg je eerste recept toe met de + rechtsboven.</p>
       )}
     </div>
+  );
+}
+
+function RecipeRow({ recipe }: { recipe: RecipeSummary }) {
+  const meta = [
+    pluralize(recipe.ingredientNames.length, "ingrediënt", "ingrediënten"),
+    pluralize(recipe.stepCount, "stap", "stappen"),
+  ].join(" · ");
+
+  return (
+    <li>
+      <Link
+        href={`/recepten/${recipe.id}`}
+        className="flex min-h-[52px] items-center gap-3 px-3.5 py-3 transition-colors active:bg-accent"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-medium first-letter:uppercase">{recipe.title}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {recipe.onList && <span className="text-primary">In mandje · </span>}
+            {meta}
+          </p>
+        </div>
+        {recipe.tags.length > 0 && (
+          <div className="flex shrink-0 gap-1.5">
+            {recipe.tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-primary"
+              >
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        )}
+        <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
+      </Link>
+    </li>
   );
 }
 
@@ -123,66 +73,59 @@ export default function ReceptenPageClient({
   tags: RecipeTagView[];
 }) {
   const [query, setQuery] = useState("");
-  const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
 
   const filtered = useMemo(
-    () => filterRecipes(recipes, query, [...selectedTagIds]),
+    () => filterRecipes(recipes, query, selectedTagIds),
     [recipes, query, selectedTagIds]
   );
 
   return (
-    <div className="relative flex h-full w-full flex-col">
-      <PageHeader title="Recepten" right={<HuisButton />} />
+    <div className="flex h-full w-full flex-col">
+      <PageHeader
+        title="Recepten"
+        left={<HuisButton />}
+        right={
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="shrink-0 text-primary-foreground hover:bg-white/10 active:bg-white/20"
+          >
+            <Link href="/recepten/nieuw" aria-label="Nieuw recept">
+              <Plus className="h-6 w-6" />
+            </Link>
+          </Button>
+        }
+      />
 
-      <div className="w-full max-w-2xl mx-auto shrink-0 space-y-3 px-4 pt-3">
+      <div className="mx-auto w-full max-w-2xl shrink-0 space-y-3 px-4 pt-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Zoek op titel…"
-            aria-label="Zoek op titel"
-            className="pl-9"
+            placeholder="Zoek op naam of ingrediënt…"
+            aria-label="Zoek op naam of ingrediënt"
+            className="h-12 pl-9"
           />
         </div>
         {tags.length > 0 && (
-          <TagFilter tags={tags} selected={selectedTagIds} onChange={setSelectedTagIds} />
+          <TagChips tags={tags} selectedIds={selectedTagIds} onChange={setSelectedTagIds} />
         )}
       </div>
 
-      <main className="w-full max-w-2xl mx-auto flex-1 overflow-y-auto px-4 py-4">
+      <main className="mx-auto w-full max-w-2xl flex-1 overflow-y-auto px-4 py-4">
         {filtered.length === 0 ? (
           <EmptyState hasRecipes={recipes.length > 0} />
         ) : (
-          <ul className="space-y-2">
+          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
             {filtered.map((recipe) => (
-              <li key={recipe.id}>
-                <Link
-                  href={`/recepten/${recipe.id}`}
-                  className="block rounded-lg border border-border bg-card p-3 transition-colors active:bg-accent"
-                >
-                  <p className="font-medium first-letter:uppercase">{recipe.title}</p>
-                  {recipe.tags.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      {recipe.tags.map((t) => t.name).join(", ")}
-                    </p>
-                  )}
-                </Link>
-              </li>
+              <RecipeRow key={recipe.id} recipe={recipe} />
             ))}
           </ul>
         )}
       </main>
-
-      <Button
-        asChild
-        size="icon"
-        className="absolute bottom-4 right-4 h-14 w-14 rounded-full shadow-lg"
-      >
-        <Link href="/recepten/nieuw" aria-label="Nieuw recept">
-          <Plus className="h-6 w-6" />
-        </Link>
-      </Button>
     </div>
   );
 }

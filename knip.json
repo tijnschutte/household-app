@@ -24,9 +24,6 @@
     "tailwindcss-animate",
     // Backs the vendored primitives ignored above.
     "@radix-ui/react-alert-dialog",
-    "@radix-ui/react-tooltip",
-    // recepten/recipe-form.tsx uses react-hook-form directly but validates
-    // with recipeSchema.safeParse rather than the zodResolver adapter.
-    "@hookform/resolvers"
+    "@radix-ui/react-tooltip"
   ]
 }

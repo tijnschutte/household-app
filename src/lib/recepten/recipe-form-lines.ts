@@ -1,75 +1,56 @@
-// The ingredient rows as the recipe form holds them — three text fields per
-// row — and the two translations across that edge: a saved recipe into rows
-// the form can edit, and typed rows back into the lines the schema accepts.
-// Pure, so the row-level rules (an unparseable quantity, a name repeated from
-// an earlier row) are unit-tested without rendering the form; the component
-// only has to pin each reported error onto its row.
+// The ingredient entry row of the recipe form — three text fields — and the
+// one translation across that edge: a typed draft into the line the schema
+// accepts, or the reason it cannot be. Pure, so the row-level rules (an
+// unparseable quantity, a name already on the recipe) are unit-tested without
+// rendering the form; the component only has to show the error it is handed.
 
 import { parseQuantity } from "@/src/lib/recepten/quantity-input";
+import { canonicalUnit } from "@/src/lib/recepten/units";
 import type { RecipeIngredientView } from "@/src/lib/recepten/view";
 
-export type IngredientFormLine = { name: string; quantity: string; unit: string };
+export type IngredientDraft = { name: string; quantity: string; unit: string };
 
-export type RecipeFormValues = {
-  title: string;
-  instructions: string;
-  ingredients: IngredientFormLine[];
-};
+export type DraftError = { field: "name" | "quantity"; message: string };
 
-export type IngredientLineError = {
-  index: number;
-  field: "name" | "quantity";
-  message: string;
-};
+export type DraftResult =
+  { ok: true; line: RecipeIngredientView } | { ok: false; error: DraftError };
 
-export function emptyLine(): IngredientFormLine {
+/**
+ * The step rows as the editor holds them: exactly one blank row at the end,
+ * whatever was typed or removed. That row is where the next step is typed;
+ * the schema drops it when it stays empty.
+ */
+export function withTrailingBlank(steps: string[]): string[] {
+  const trimmedEnd = [...steps];
+  while (trimmedEnd.length > 0 && trimmedEnd[trimmedEnd.length - 1] === "") trimmedEnd.pop();
+  return [...trimmedEnd, ""];
+}
+
+export function emptyDraft(): IngredientDraft {
   return { name: "", quantity: "", unit: "" };
 }
 
-/** Prefills the editor; a recipe with no lines still gets one blank row to type into. */
-export function toFormLines(ingredients: RecipeIngredientView[]): IngredientFormLine[] {
-  if (ingredients.length === 0) return [emptyLine()];
-  return ingredients.map((line) => ({
-    name: line.name,
-    quantity: line.quantity === null ? "" : String(line.quantity).replace(".", ","),
-    unit: line.unit ?? "",
-  }));
-}
-
 /**
- * Only rows with a name typed in count — an untouched blank row is dropped, so
- * the "+ Ingrediënt" row someone opened and abandoned never blocks the save.
- * Every error is reported against the row it belongs to rather than the first
- * one found, so all offending rows light up at once (B1, B3).
+ * Names are compared the way the schema and the database compare them,
+ * trimmed and lowercased, so "Ui" cannot be added beside "ui" only to be
+ * refused on save.
  */
-export function parseIngredientLines(lines: IngredientFormLine[]): {
-  ingredients: RecipeIngredientView[];
-  errors: IngredientLineError[];
-} {
-  const seenNames = new Set<string>();
-  const ingredients: RecipeIngredientView[] = [];
-  const errors: IngredientLineError[] = [];
+export function parseDraft(draft: IngredientDraft, existing: RecipeIngredientView[]): DraftResult {
+  const name = draft.name.trim().toLowerCase();
+  if (name === "") {
+    return { ok: false, error: { field: "name", message: "Naam is vereist" } };
+  }
+  if (existing.some((line) => line.name.trim().toLowerCase() === name)) {
+    return { ok: false, error: { field: "name", message: "Staat al in dit recept" } };
+  }
 
-  lines.forEach((line, index) => {
-    if (line.name.trim() === "") return;
+  const quantity = parseQuantity(draft.quantity);
+  if (!quantity.ok) {
+    return {
+      ok: false,
+      error: { field: "quantity", message: "Hoeveelheid moet een getal zijn" },
+    };
+  }
 
-    const parsedQuantity = parseQuantity(line.quantity);
-    if (!parsedQuantity.ok) {
-      errors.push({ index, field: "quantity", message: "Hoeveelheid moet een getal zijn" });
-    }
-
-    const normalizedName = line.name.trim().toLowerCase();
-    if (seenNames.has(normalizedName)) {
-      errors.push({ index, field: "name", message: "Staat al in dit recept" });
-    }
-    seenNames.add(normalizedName);
-
-    ingredients.push({
-      name: line.name,
-      quantity: parsedQuantity.ok ? parsedQuantity.value : null,
-      unit: line.unit.trim() === "" ? null : line.unit,
-    });
-  });
-
-  return { ingredients, errors };
+  return { ok: true, line: { name, quantity: quantity.value, unit: canonicalUnit(draft.unit) } };
 }

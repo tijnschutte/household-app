@@ -183,7 +183,7 @@ async function seedList(sections: ListSection[], owner: ListOwner) {
 
 type RecipeSeed = {
   title: string;
-  instructions: string;
+  steps: string[];
   tags: string[];
   ingredients: { name: string; quantity: number | null; unit: string | null }[];
 };
@@ -191,42 +191,45 @@ type RecipeSeed = {
 const RECIPES: RecipeSeed[] = [
   {
     title: "Pasta pesto",
-    instructions:
-      "Kook de pasta beetgaar volgens de verpakking.\n\n" +
-      "Rasp de kaas en meng met de pesto door de afgegoten pasta.\n\n" +
+    steps: [
+      "Kook de pasta beetgaar volgens de verpakking.",
+      "Rasp de kaas en meng met de pesto door de afgegoten pasta.",
       "Breng op smaak met peper en serveer direct.",
+    ],
     tags: ["Snel", "Vegetarisch"],
     ingredients: [
-      { name: "pasta", quantity: 200, unit: "gram" },
+      { name: "pasta", quantity: 200, unit: "g" },
       { name: "pesto", quantity: 1, unit: "pot" },
-      { name: "parmezaanse kaas", quantity: 30, unit: "gram" },
+      { name: "parmezaanse kaas", quantity: 30, unit: "g" },
     ],
   },
   {
     title: "Tomatensoep",
-    instructions:
-      "Fruit de ui in een scheutje olie tot glazig.\n\n" +
-      "Voeg de tomaten en bouillon toe en laat 20 minuten sudderen.\n\n" +
+    steps: [
+      "Fruit de ui in een scheutje olie tot glazig.",
+      "Voeg de tomaten en bouillon toe en laat 20 minuten sudderen.",
       "Pureer de soep glad en breng op smaak met peper en zout.",
+    ],
     tags: ["Vegetarisch"],
     ingredients: [
       { name: "ui", quantity: 1, unit: null },
-      { name: "tomaten", quantity: 800, unit: "gram" },
+      { name: "tomaten", quantity: 800, unit: "g" },
       { name: "groentebouillon", quantity: 500, unit: "ml" },
     ],
   },
   {
     title: "Kip curry",
-    instructions:
-      "Snijd de kip in blokjes en bak ze aan in een hete pan.\n\n" +
-      "Voeg de currypasta en kokosmelk toe en laat 15 minuten sudderen.\n\n" +
+    steps: [
+      "Snijd de kip in blokjes en bak ze aan in een hete pan.",
+      "Voeg de currypasta en kokosmelk toe en laat 15 minuten sudderen.",
       "Serveer met rijst.",
+    ],
     tags: ["Snel"],
     ingredients: [
-      { name: "kipfilet", quantity: 400, unit: "gram" },
+      { name: "kipfilet", quantity: 400, unit: "g" },
       { name: "currypasta", quantity: 2, unit: "el" },
       { name: "kokosmelk", quantity: 1, unit: "blik" },
-      { name: "rijst", quantity: 250, unit: "gram" },
+      { name: "rijst", quantity: 250, unit: "g" },
     ],
   },
 ];
@@ -258,7 +261,7 @@ async function seedRecipes(householdId: number) {
       create: {
         householdId,
         title: recipe.title,
-        instructions: recipe.instructions,
+        steps: recipe.steps,
         tags: { connect: tags.map((tag) => ({ id: tag.id })) },
         ingredients: {
           create: recipe.ingredients.map((ingredient, index) => ({

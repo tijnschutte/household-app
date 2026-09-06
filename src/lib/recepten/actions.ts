@@ -1,6 +1,7 @@
 "use server";
 
 import { after } from "next/server";
+import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import prisma from "@/src/lib/db/db";
 import { executeAction } from "@/src/lib/executeAction";
@@ -96,7 +97,7 @@ export async function createRecipe(input: RecipeInput) {
               data: {
                 householdId,
                 title: validated.title,
-                instructions: validated.instructions,
+                steps: validated.steps,
                 tags: { connect: tags.map((tag) => ({ id: tag.id })) },
                 ingredients: { create: ingredientLines(validated, ingredientIdByName) },
               },
@@ -134,7 +135,7 @@ export async function updateRecipe(id: number, input: RecipeInput) {
               where: { id },
               data: {
                 title: validated.title,
-                instructions: validated.instructions,
+                steps: validated.steps,
                 tags: { set: tags.map((tag) => ({ id: tag.id })) },
                 ingredients: { create: ingredientLines(validated, ingredientIdByName) },
               },
@@ -155,10 +156,12 @@ export async function deleteRecipe(id: number) {
 }
 
 /**
- * Adds every ingredient on a recipe to the shared list, merging into whatever
- * is already there per `mergeIntoList`'s rules — one transaction, one push.
+ * Puts the chosen ingredients of a recipe on the shared list, merging into
+ * whatever is already there per `mergeIntoList`'s rules — one transaction, one
+ * push. `ingredientNames` is what the person left ticked in the sheet; a name
+ * that is not on the recipe is ignored rather than trusted.
  */
-export async function addRecipeToBasket(recipeId: number) {
+export async function addRecipeToBasket(recipeId: number, ingredientNames: string[]) {
   const caller = await requireHousehold();
 
   const recipe = await prisma.recipe.findFirst({
@@ -169,11 +172,22 @@ export async function addRecipeToBasket(recipeId: number) {
     throw new Error("Recept niet gevonden");
   }
 
-  const lines = recipe.ingredients.map((line) => ({
-    name: line.ingredient.name,
-    quantity: line.quantity === null ? null : Number(line.quantity),
-    unit: line.unit,
-  }));
+  // Client input: only trusted as far as it names lines this recipe has.
+  const chosen = new Set(z.array(z.string()).parse(ingredientNames));
+  const lines = recipe.ingredients.flatMap((line) =>
+    chosen.has(line.ingredient.name)
+      ? [
+          {
+            name: line.ingredient.name,
+            quantity: line.quantity === null ? null : Number(line.quantity),
+            unit: line.unit,
+          },
+        ]
+      : []
+  );
+  if (lines.length === 0) {
+    throw new DomainError("Kies minstens één ingrediënt");
+  }
 
   const listScope = scopeToList(caller, false);
   const existing = await prisma.grocery.findMany({

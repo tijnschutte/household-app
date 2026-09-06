@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/src/components/ui/button";
+import { Plus } from "lucide-react";
 import { Input } from "@/src/components/ui/input";
 import type { RecipeTagView } from "@/src/lib/recepten/view";
 
 /**
- * The recipe's categories as a row of toggle chips, plus an inline field to
- * coin a new one. Which names are selected is the form's to keep (it goes out
- * with the save); which chips are on offer is ours, since a freshly coined
- * name must stay visible after it is toggled off again.
+ * The recipe's tags as a row of toggle chips, plus an inline field to coin a
+ * new one. Which names are selected is the form's to keep (it goes out with
+ * the save); which chips are on offer is ours, since a freshly coined name
+ * must stay visible after it is toggled off again.
  */
 export default function TagPicker({
   existingTags,
@@ -33,12 +33,17 @@ export default function TagPicker({
 
   const addNew = () => {
     const trimmed = newTagName.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      setNewTagOpen(false);
+      return;
+    }
     setOptions((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
     if (!selectedSet.has(trimmed)) onChange([...selected, trimmed]);
     setNewTagName("");
     setNewTagOpen(false);
   };
+
+  const chip = "h-7 rounded-full px-2.5 text-xs font-medium transition-colors";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -46,45 +51,44 @@ export default function TagPicker({
         <button
           key={name}
           type="button"
+          aria-pressed={selectedSet.has(name)}
           onClick={() => toggle(name)}
           disabled={disabled}
-          className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`${chip} ${
             selectedSet.has(name)
               ? "bg-primary text-primary-foreground"
-              : "bg-secondary text-muted-foreground"
+              : "border border-border bg-card text-foreground"
           }`}
         >
           {name}
         </button>
       ))}
       {newTagOpen ? (
-        <div className="flex items-center gap-1">
-          <Input
-            autoFocus
-            value={newTagName}
-            onChange={(e) => setNewTagName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addNew();
-              }
-            }}
-            placeholder="Nieuwe categorie"
-            maxLength={30}
-            className="h-8 w-32 rounded-full text-sm"
-          />
-          <Button type="button" size="sm" onClick={addNew} disabled={disabled}>
-            Toevoegen
-          </Button>
-        </div>
+        <Input
+          autoFocus
+          value={newTagName}
+          onChange={(e) => setNewTagName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addNew();
+            }
+          }}
+          onBlur={addNew}
+          placeholder="Nieuwe tag"
+          aria-label="Nieuwe tag"
+          maxLength={30}
+          className="h-7 w-32 rounded-full text-xs"
+        />
       ) : (
         <button
           type="button"
           onClick={() => setNewTagOpen(true)}
           disabled={disabled}
-          className="rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted-foreground"
+          className={`${chip} flex items-center gap-1 border border-dashed border-border text-muted-foreground`}
         >
-          + nieuw
+          <Plus className="h-3 w-3" />
+          Tag
         </button>
       )}
     </div>

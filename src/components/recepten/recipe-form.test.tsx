@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Toaster } from "sonner";
 import { useRouter } from "next/navigation";
 import RecipeForm from "./recipe-form";
 import { succeeds, fails } from "@/tests/fixtures/household";
@@ -25,275 +26,192 @@ function fakeSubmit(
   };
 }
 
-function renderForm(submit = fakeSubmit()) {
+function renderForm(submit = fakeSubmit(), ingredientNames: { id: number; name: string }[] = []) {
   render(
-    <RecipeForm
-      pageTitle="Nieuw recept"
-      existingTags={[]}
-      ingredientNames={[]}
-      onSubmit={submit.onSubmit}
-    />
+    <>
+      <RecipeForm
+        pageTitle="Nieuw recept"
+        existingTags={[]}
+        ingredientNames={ingredientNames}
+        onSubmit={submit.onSubmit}
+      />
+      <Toaster />
+    </>
   );
   return submit;
 }
 
-/** The edit page's shape: prefilled, and able to delete. */
-function renderEditForm() {
-  const deleted: number[] = [];
-  render(
-    <RecipeForm
-      pageTitle="Recept bewerken"
-      initial={{
-        title: "Pasta pesto",
-        instructions: "",
-        tags: [],
-        ingredients: [{ name: "ui", quantity: null, unit: null }],
-      }}
-      existingTags={[]}
-      ingredientNames={[]}
-      onSubmit={fakeSubmit().onSubmit}
-      onDelete={async () => {
-        deleted.push(1);
-      }}
-    />
-  );
-  return { deleted };
-}
-
-async function fillFirstRow(name: string, quantity: string, unit: string) {
-  if (name) await userEvent.type(screen.getAllByLabelText("Ingrediëntnaam")[0], name);
-  if (quantity) await userEvent.type(screen.getAllByLabelText("Hoeveelheid")[0], quantity);
-  if (unit) await userEvent.type(screen.getAllByLabelText("Eenheid")[0], unit);
+async function addIngredient(name: string, quantity = "", unit = "") {
+  const user = userEvent.setup();
+  if (quantity) await user.type(screen.getByLabelText("Aantal"), quantity);
+  if (unit) await user.type(screen.getByLabelText("Eenheid"), unit);
+  await user.type(screen.getByLabelText("Ingrediënt"), name);
+  await user.click(screen.getByRole("button", { name: "Ingrediënt toevoegen" }));
 }
 
 describe("RecipeForm", () => {
-  it("submits a normalised recipe after adding a line", async () => {
+  it("submits a normalised recipe and navigates to it", async () => {
+    const user = userEvent.setup();
     const submit = renderForm();
 
-    await userEvent.type(screen.getByLabelText("Titel"), "Pasta pesto");
-    await fillFirstRow("Ui", "2", "STUKS");
+    await user.type(screen.getByLabelText("Titel"), "Pasta pesto");
+    await addIngredient("Ui", "2", "STUK");
+    await addIngredient("Kaas");
+    await user.type(screen.getByLabelText("Stap 1"), "Snijd de ui.{Enter}Rasp de kaas.");
+    await user.click(screen.getByRole("button", { name: "Bewaar" }));
 
-    await userEvent.click(screen.getByRole("button", { name: "Ingrediënt" }));
-    await userEvent.type(screen.getAllByLabelText("Ingrediëntnaam")[1], "Kaas");
-
-    await userEvent.type(screen.getByLabelText("Bereiding"), "Snijd de ui.");
-    await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
-
-    expect(submit.calls).toEqual([
-      {
-        title: "Pasta pesto",
-        instructions: "Snijd de ui.",
-        ingredients: [
-          { name: "ui", quantity: 2, unit: "stuks" },
-          { name: "kaas", quantity: null, unit: null },
-        ],
-        tags: [],
-      },
-    ]);
+    await waitFor(() => expect(submit.calls).toHaveLength(1));
+    expect(submit.calls[0]).toEqual({
+      title: "Pasta pesto",
+      steps: ["Snijd de ui.", "Rasp de kaas."],
+      ingredients: [
+        { name: "ui", quantity: 2, unit: "stuks" },
+        { name: "kaas", quantity: null, unit: null },
+      ],
+      tags: [],
+    });
+    expect(useRouter().push).toHaveBeenCalledWith("/recepten/7");
   });
 
-  it("refuses to submit with no ingredients at all filled in", async () => {
+  it("shows an added line with its quantity and clears the entry row for the next", async () => {
+    renderForm();
+
+    await addIngredient("pasta", "300", "g");
+
+    expect(screen.getByText("pasta")).toBeInTheDocument();
+    expect(screen.getByText("300 g")).toBeInTheDocument();
+    expect(screen.getByLabelText("Ingrediënt")).toHaveValue("");
+    expect(screen.getByLabelText("Aantal")).toHaveValue("");
+  });
+
+  it("adds a line on Enter in the name field", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText("Ingrediënt"), "pasta{Enter}");
+
+    expect(screen.getByText("pasta")).toBeInTheDocument();
+  });
+
+  it("removes a line again", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await addIngredient("pasta");
+
+    await user.click(screen.getByRole("button", { name: "pasta verwijderen" }));
+
+    expect(screen.queryByText("pasta")).not.toBeInTheDocument();
+  });
+
+  it("refuses a line without a name, and a name already on the recipe", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(screen.getByRole("button", { name: "Ingrediënt toevoegen" }));
+    expect(screen.getByText("Naam is vereist")).toBeInTheDocument();
+
+    await addIngredient("ui");
+    await addIngredient(" UI ");
+    expect(screen.getByText("Staat al in dit recept")).toBeInTheDocument();
+    expect(screen.getAllByText("ui")).toHaveLength(1);
+  });
+
+  it("refuses a quantity that is not a number, and keeps the draft to fix", async () => {
+    renderForm();
+
+    await addIngredient("ui", "abc");
+
+    expect(screen.getByText("Hoeveelheid moet een getal zijn")).toBeInTheDocument();
+    expect(screen.getByLabelText("Ingrediënt")).toHaveValue("ui");
+    expect(screen.queryByRole("button", { name: "ui verwijderen" })).not.toBeInTheDocument();
+  });
+
+  it("offers the household's ingredient names while typing, and picking one fills the field", async () => {
+    const user = userEvent.setup();
+    renderForm(fakeSubmit(), [{ id: 1, name: "pasta" }]);
+
+    await user.type(screen.getByLabelText("Ingrediënt"), "pas");
+    await user.click(screen.getByRole("button", { name: "pasta" }));
+
+    expect(screen.getByLabelText("Ingrediënt")).toHaveValue("pasta");
+  });
+
+  it("shows a missing title under the field and does not submit", async () => {
+    const user = userEvent.setup();
     const submit = renderForm();
+    await addIngredient("ui");
 
-    await userEvent.type(screen.getByLabelText("Titel"), "Leeg recept");
-    await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
+    await user.click(screen.getByRole("button", { name: "Bewaar" }));
 
+    expect(screen.getByText("Titel is vereist")).toBeInTheDocument();
     expect(submit.calls).toEqual([]);
   });
 
-  it("removes a line with its own remove button", async () => {
+  it("toasts the schema's message when there is no ingredient", async () => {
+    const user = userEvent.setup();
     const submit = renderForm();
+    await user.type(screen.getByLabelText("Titel"), "Leeg");
 
-    await userEvent.click(screen.getByRole("button", { name: "Ingrediënt" }));
-    expect(screen.getAllByLabelText("Ingrediëntnaam")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Bewaar" }));
 
-    await userEvent.click(screen.getAllByLabelText("Ingrediënt verwijderen")[1]);
-    expect(screen.getAllByLabelText("Ingrediëntnaam")).toHaveLength(1);
-
-    await userEvent.type(screen.getByLabelText("Titel"), "Een regel");
-    await fillFirstRow("ui", "", "");
-    await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
-
-    expect(submit.calls).toEqual([
-      {
-        title: "Een regel",
-        instructions: "",
-        ingredients: [{ name: "ui", quantity: null, unit: null }],
-        tags: [],
-      },
-    ]);
+    expect(await screen.findByText("Voeg minstens 1 ingrediënt toe")).toBeInTheDocument();
+    expect(submit.calls).toEqual([]);
   });
 
-  it("lets the user try again when the server rejects the title", async () => {
-    const submit = fakeSubmit(fails("Er is al een recept met deze naam"));
-    renderForm(submit);
+  it("toasts a failure the action reports and stays on the form", async () => {
+    const user = userEvent.setup();
+    renderForm(fakeSubmit(fails("Er is al een recept met deze naam")));
+    await user.type(screen.getByLabelText("Titel"), "Pasta pesto");
+    await addIngredient("ui");
 
-    await userEvent.type(screen.getByLabelText("Titel"), "Pasta pesto");
-    await fillFirstRow("ui", "", "");
-    await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
+    await user.click(screen.getByRole("button", { name: "Bewaar" }));
 
-    expect(submit.calls).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Opslaan" })).toBeEnabled();
+    expect(await screen.findByText("Er is al een recept met deze naam")).toBeInTheDocument();
+    expect(useRouter().push).not.toHaveBeenCalled();
   });
 
-  it("toggles a category chip and adds a new one", async () => {
-    const submit = renderForm();
-    // No existing tags passed in, so this exercises the "+ nieuw" inline add.
-    await userEvent.click(screen.getByRole("button", { name: "+ nieuw" }));
-    await userEvent.type(screen.getByPlaceholderText("Nieuwe categorie"), "Snel");
-    await userEvent.click(screen.getByRole("button", { name: "Toevoegen" }));
-
-    await userEvent.type(screen.getByLabelText("Titel"), "Snelle pasta");
-    await fillFirstRow("ui", "", "");
-    await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
-
-    expect(submit.calls[0].tags).toEqual(["Snel"]);
-  });
-
-  it("offers no delete when creating a recipe", () => {
-    renderForm();
-
-    expect(screen.queryByRole("button", { name: "Recept verwijderen" })).not.toBeInTheDocument();
-  });
-
-  it("deletes after confirming, and navigates back to the list", async () => {
-    const { deleted } = renderEditForm();
-
-    await userEvent.click(screen.getByRole("button", { name: "Recept verwijderen" }));
-    await userEvent.click(screen.getByRole("button", { name: "Verwijderen" }));
-
-    expect(deleted).toEqual([1]);
-    expect(useRouter().push).toHaveBeenCalledWith("/recepten");
-  });
-
-  it("cancelling the confirmation deletes nothing", async () => {
-    const { deleted } = renderEditForm();
-
-    await userEvent.click(screen.getByRole("button", { name: "Recept verwijderen" }));
-    await userEvent.click(screen.getByRole("button", { name: "Annuleren" }));
-
-    expect(deleted).toEqual([]);
-  });
-
-  describe("quantity (B1)", () => {
-    it("parses a unicode fraction and a mixed number", async () => {
-      const submit = renderForm();
-
-      await userEvent.type(screen.getByLabelText("Titel"), "Pasta pesto");
-      await userEvent.type(screen.getAllByLabelText("Ingrediëntnaam")[0], "ui");
-      await userEvent.type(screen.getAllByLabelText("Hoeveelheid")[0], "1 ½");
-      await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
-
-      expect(submit.calls).toEqual([
-        {
+  it("prefills an existing recipe and lets its lines be removed", async () => {
+    const user = userEvent.setup();
+    const submit = fakeSubmit(succeeds("Recept bijgewerkt", { id: 3 }));
+    render(
+      <RecipeForm
+        pageTitle="Recept bewerken"
+        initial={{
           title: "Pasta pesto",
-          instructions: "",
-          ingredients: [{ name: "ui", quantity: 1.5, unit: null }],
-          tags: [],
-        },
-      ]);
-    });
+          steps: ["Kook de pasta."],
+          tags: [{ id: 1, name: "Snel" }],
+          ingredients: [
+            { name: "pasta", quantity: 200, unit: "g" },
+            { name: "zout", quantity: null, unit: null },
+          ],
+        }}
+        existingTags={[{ id: 1, name: "Snel" }]}
+        ingredientNames={[]}
+        onSubmit={submit.onSubmit}
+      />
+    );
 
-    it("marks an unparseable quantity on its own row and blocks the save", async () => {
-      const submit = renderForm();
+    expect(screen.getByLabelText("Titel")).toHaveValue("Pasta pesto");
+    expect(screen.getByLabelText("Stap 1")).toHaveValue("Kook de pasta.");
+    expect(screen.getByRole("button", { name: "Snel" })).toHaveAttribute("aria-pressed", "true");
 
-      await userEvent.type(screen.getByLabelText("Titel"), "Pasta pesto");
-      await fillFirstRow("ui", "abc", "");
-      await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
+    await user.click(screen.getByRole("button", { name: "zout verwijderen" }));
+    await user.click(screen.getByRole("button", { name: "Bewaar" }));
 
-      expect(screen.getByText("Hoeveelheid moet een getal zijn")).toBeInTheDocument();
-      expect(submit.calls).toEqual([]);
-    });
-  });
-
-  describe("title length (B2)", () => {
-    it("accepts typing a title over 80 characters, rather than truncating it", async () => {
-      renderForm();
-      const longTitle = "a".repeat(90);
-
-      await userEvent.type(screen.getByLabelText("Titel"), longTitle);
-
-      expect(screen.getByLabelText("Titel")).toHaveValue(longTitle);
-    });
-
-    it("shows the schema's message under the field and blocks the save", async () => {
-      const submit = renderForm();
-
-      await userEvent.type(screen.getByLabelText("Titel"), "a".repeat(90));
-      await fillFirstRow("ui", "", "");
-      await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
-
-      expect(screen.getByText("Titel mag maximaal 80 tekens zijn")).toBeInTheDocument();
-      expect(submit.calls).toEqual([]);
+    await waitFor(() => expect(submit.calls).toHaveLength(1));
+    expect(submit.calls[0]).toMatchObject({
+      ingredients: [{ name: "pasta", quantity: 200, unit: "g" }],
+      tags: ["Snel"],
     });
   });
 
-  describe("duplicate ingredient names (B3)", () => {
-    it("marks the later row and blocks the save, leaving the first row untouched", async () => {
-      const submit = renderForm();
+  it("the × in the header goes back without saving", async () => {
+    const user = userEvent.setup();
+    const submit = renderForm();
 
-      await userEvent.type(screen.getByLabelText("Titel"), "Pasta pesto");
-      await fillFirstRow("ui", "", "");
-      await userEvent.click(screen.getByRole("button", { name: "Ingrediënt" }));
-      await userEvent.type(screen.getAllByLabelText("Ingrediëntnaam")[1], "UI");
-      await userEvent.click(screen.getByRole("button", { name: "Opslaan" }));
+    await user.click(screen.getByRole("button", { name: "Annuleren" }));
 
-      expect(screen.getByText("Staat al in dit recept")).toBeInTheDocument();
-      expect(submit.calls).toEqual([]);
-    });
-  });
-
-  describe("ingredient-name autocomplete (B4)", () => {
-    const ingredientNames = [{ id: 1, name: "ui" }];
-
-    function renderFormWithIngredients() {
-      const submit = fakeSubmit();
-      render(
-        <RecipeForm
-          pageTitle="Nieuw recept"
-          existingTags={[]}
-          ingredientNames={ingredientNames}
-          onSubmit={submit.onSubmit}
-        />
-      );
-      return submit;
-    }
-
-    it("closes the suggestions on Escape", async () => {
-      renderFormWithIngredients();
-      const nameField = screen.getAllByLabelText("Ingrediëntnaam")[0];
-
-      await userEvent.type(nameField, "u");
-      expect(screen.getByRole("button", { name: "ui" })).toBeInTheDocument();
-
-      await userEvent.keyboard("{Escape}");
-      expect(screen.queryByRole("button", { name: "ui" })).not.toBeInTheDocument();
-    });
-
-    it("closes the suggestions on blur", async () => {
-      renderFormWithIngredients();
-      const nameField = screen.getAllByLabelText("Ingrediëntnaam")[0];
-
-      await userEvent.type(nameField, "u");
-      expect(screen.getByRole("button", { name: "ui" })).toBeInTheDocument();
-
-      await userEvent.tab();
-      // The suggestion's onMouseDown gets a 150ms window to fire first.
-      await waitFor(() =>
-        expect(screen.queryByRole("button", { name: "ui" })).not.toBeInTheDocument()
-      );
-    });
-  });
-
-  describe("column labels replace clipped placeholders (B5)", () => {
-    it("shows a header row of column labels instead of placeholder text", () => {
-      renderForm();
-
-      expect(screen.getByText("Ingrediënt", { selector: "span" })).toBeInTheDocument();
-      expect(screen.getByText("Aantal")).toBeInTheDocument();
-      expect(screen.getByText("Eenheid")).toBeInTheDocument();
-      expect(screen.getAllByLabelText("Hoeveelheid")[0]).not.toHaveAttribute("placeholder");
-      expect(screen.getAllByLabelText("Eenheid")[0]).not.toHaveAttribute("placeholder");
-    });
+    expect(useRouter().back).toHaveBeenCalled();
+    expect(submit.calls).toEqual([]);
   });
 });

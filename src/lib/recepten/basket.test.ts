@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeIntoList, type ListRow } from "@/src/lib/recepten/basket";
+import { allOnList, mergeIntoList, mergeOutcome, type ListRow } from "@/src/lib/recepten/basket";
 
 function aRow(overrides: Partial<ListRow> = {}): ListRow {
   return {
@@ -108,5 +108,55 @@ describe("mergeIntoList", () => {
         { id: 2, quantity: 1, unit: "liter", bought: false },
       ])
     );
+  });
+});
+
+describe("mergeOutcome", () => {
+  it("is 'create' for a line not on the list", () => {
+    expect(mergeOutcome({ name: "ui", quantity: 1, unit: null }, [])).toEqual({ kind: "create" });
+  });
+
+  it("is 'sum' with the added-up quantity for an unbought row in the same unit", () => {
+    const row = aRow({ id: 7, quantity: 200, unit: "g" });
+
+    expect(mergeOutcome({ name: "ui", quantity: 200, unit: "g" }, [row])).toEqual({
+      kind: "sum",
+      row,
+      quantity: 400,
+    });
+  });
+
+  it("is 'restore' for a bought row, whatever its unit", () => {
+    const row = aRow({ id: 7, quantity: 1, unit: "bosje", bought: true });
+
+    expect(mergeOutcome({ name: "ui", quantity: 1, unit: "handje" }, [row])).toEqual({
+      kind: "restore",
+      row,
+    });
+  });
+
+  it("is 'skip' for an unbought row in another unit", () => {
+    const row = aRow({ id: 7, quantity: 1, unit: "bosje" });
+
+    expect(mergeOutcome({ name: "ui", quantity: 1, unit: "handje" }, [row])).toEqual({
+      kind: "skip",
+      row,
+    });
+  });
+});
+
+describe("allOnList", () => {
+  it("is true when every name has an unbought row, matched case-insensitively", () => {
+    const rows = [aRow({ name: "Pasta" }), aRow({ id: 2, name: "kaas" })];
+
+    expect(allOnList(["pasta", "Kaas"], rows)).toBe(true);
+  });
+
+  it("is false while a name is missing", () => {
+    expect(allOnList(["pasta", "kaas"], [aRow({ name: "pasta" })])).toBe(false);
+  });
+
+  it("is false while a name's row is already bought", () => {
+    expect(allOnList(["pasta"], [aRow({ name: "pasta", bought: true })])).toBe(false);
   });
 });

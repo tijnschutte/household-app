@@ -3,7 +3,15 @@ import { filterRecipes } from "@/src/lib/recepten/search";
 import type { RecipeSummary } from "@/src/lib/recepten/view";
 
 function aRecipe(overrides: Partial<RecipeSummary> = {}): RecipeSummary {
-  return { id: 1, title: "Pasta pesto", tags: [], ...overrides };
+  return {
+    id: 1,
+    title: "Pasta pesto",
+    tags: [],
+    ingredientNames: [],
+    stepCount: 0,
+    onList: false,
+    ...overrides,
+  };
 }
 
 describe("filterRecipes", () => {
@@ -17,6 +25,13 @@ describe("filterRecipes", () => {
     const recipes = [aRecipe({ title: "Pasta pesto" }), aRecipe({ id: 2, title: "Tomatensoep" })];
 
     expect(filterRecipes(recipes, "PASTA", [])).toEqual([recipes[0]]);
+  });
+
+  it("matches an ingredient name too", () => {
+    const withBasil = aRecipe({ id: 1, title: "Caprese", ingredientNames: ["basilicum"] });
+    const without = aRecipe({ id: 2, title: "Tomatensoep", ingredientNames: ["ui"] });
+
+    expect(filterRecipes([withBasil, without], "basil", [])).toEqual([withBasil]);
   });
 
   it("keeps only recipes carrying the selected tag", () => {

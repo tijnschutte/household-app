@@ -1,188 +1,241 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Toaster } from "sonner";
+import { useRouter } from "next/navigation";
 import RecipeDetailClient from "./recipe-detail-client";
 import type { RecipeDetail } from "@/src/lib/recepten/view";
-import type { RecipeForSuggestion } from "@/src/lib/recepten/suggestions";
+import type { ListRow } from "@/src/lib/recepten/basket";
 
 function aRecipe(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
   return {
     id: 1,
     title: "Pasta pesto",
-    instructions: "Kook de pasta.\n\nMeng met pesto.",
+    steps: ["Kook de pasta.", "Meng met pesto."],
     tags: [{ id: 1, name: "Snel" }],
     ingredients: [
-      { name: "pasta", quantity: 200, unit: "gram" },
+      { name: "pasta", quantity: 200, unit: "g" },
       { name: "pesto", quantity: null, unit: null },
     ],
-    onList: false,
+    listRows: [],
     ...overrides,
   };
 }
 
-function fakeActions(suggestions: RecipeForSuggestion[] = []) {
-  const addedToBasket: number[] = [];
-  const suggestionsRequestedFor: number[] = [];
-  let addRejects = false;
+function aRow(overrides: Partial<ListRow> = {}): ListRow {
+  return { id: 1, name: "pasta", quantity: null, unit: null, bought: false, ...overrides };
+}
 
+function fakeActions() {
+  const added: { recipeId: number; names: string[] }[] = [];
+  const deleted: number[] = [];
+  let addRejects = false;
   return {
-    addedToBasket,
-    suggestionsRequestedFor,
+    added,
+    deleted,
     rejectAdd() {
       addRejects = true;
     },
-    onAddToBasket: async (recipeId: number) => {
+    onAddToBasket: async (recipeId: number, names: string[]) => {
       if (addRejects) throw new Error("mislukt");
-      addedToBasket.push(recipeId);
+      added.push({ recipeId, names });
     },
-    onLoadSuggestions: async (recipeId: number) => {
-      suggestionsRequestedFor.push(recipeId);
-      return suggestions;
+    onDelete: async (recipeId: number) => {
+      deleted.push(recipeId);
     },
   };
 }
 
 function renderDetail(recipe = aRecipe(), fake = fakeActions()) {
+  // Toasts are how this screen reports outcomes, so the test mounts the
+  // Toaster the app layout would.
   render(
-    <RecipeDetailClient
-      recipe={recipe}
-      onAddToBasket={fake.onAddToBasket}
-      onLoadSuggestions={fake.onLoadSuggestions}
-    />
+    <>
+      <RecipeDetailClient
+        recipe={recipe}
+        onAddToBasket={fake.onAddToBasket}
+        onDelete={fake.onDelete}
+      />
+      <Toaster />
+    </>
   );
   return fake;
 }
 
+const sheet = () => screen.getByRole("dialog");
+
 describe("RecipeDetailClient", () => {
-  it("shows the ingredients segment by default, quantity and unit included", () => {
+  it("opens on the ingredients, quantity in its own column", () => {
     renderDetail();
 
     expect(screen.getByText("pasta")).toBeInTheDocument();
-    expect(screen.getByText("200 gram")).toBeInTheDocument();
-    expect(screen.getByText("pesto")).toBeInTheDocument();
+    expect(screen.getByText("200 g")).toBeInTheDocument();
   });
 
-  it("switches to the recept segment without navigating", async () => {
+  it("marks an ingredient that is on the list and not bought", () => {
+    renderDetail(
+      aRecipe({ listRows: [aRow({ name: "pasta" }), aRow({ id: 2, name: "pesto", bought: true })] })
+    );
+
+    expect(screen.getAllByText("in mandje")).toHaveLength(1);
+  });
+
+  it("the switch's right side shows the steps, which can be ticked off", async () => {
     const user = userEvent.setup();
     renderDetail();
 
-    await user.click(screen.getByRole("tab", { name: "Recept" }));
-
-    expect(screen.getByText("Kook de pasta.")).toBeInTheDocument();
-    expect(screen.getByText("Meng met pesto.")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Bereiding" }));
     expect(screen.queryByText("pasta")).not.toBeInTheDocument();
+
+    const step = screen.getByRole("button", { name: /Kook de pasta/ });
+    await user.click(step);
+    expect(step).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Meng met pesto/ })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
   });
 
-  describe("adding to the basket (D2)", () => {
-    it("adds the recipe to the basket, shows a confirmation, then reads 'Al in mandje'", async () => {
-      vi.useFakeTimers();
-      try {
-        const fake = renderDetail(aRecipe({ id: 42, onList: false }));
-        const button = screen.getByRole("button", { name: /in mandje/i });
+  it("links to the recipes it resembles", () => {
+    renderDetail(aRecipe({ id: 5 }));
 
-        // fireEvent rather than userEvent: userEvent's own internal waiting
-        // does not mix reliably with fake timers, and a plain click event
-        // needs none of its pointer-sequence simulation.
-        await act(async () => {
-          fireEvent.click(button);
-          await Promise.resolve(); // let the resolved onAddToBasket promise settle
-        });
+    expect(screen.getByRole("link", { name: "Lijkt op" })).toHaveAttribute(
+      "href",
+      "/recepten/5/lijkt-op"
+    );
+  });
 
-        expect(fake.addedToBasket).toEqual([42]);
-        expect(screen.getByText("In mandje")).toBeInTheDocument();
+  describe("In mandje", () => {
+    it("opens a sheet with every ingredient ticked and adds what stays ticked", async () => {
+      const user = userEvent.setup();
+      const fake = renderDetail(aRecipe({ id: 42 }));
 
-        await act(async () => {
-          vi.advanceTimersByTime(2000);
-        });
-        expect(button).toBeEnabled();
-        expect(screen.getByText("Al in mandje")).toBeInTheDocument();
-      } finally {
-        // Always restored, even if an assertion above throws — otherwise a
-        // failure here would leave every later test in this file waiting on a
-        // clock nothing advances.
-        vi.useRealTimers();
-      }
+      await user.click(screen.getByRole("button", { name: "In mandje" }));
+      const boxes = within(sheet()).getAllByRole("checkbox");
+      expect(boxes).toHaveLength(2);
+      expect(boxes.every((box) => box.getAttribute("aria-checked") === "true")).toBe(true);
+
+      await user.click(within(sheet()).getByRole("checkbox", { name: /pesto/ }));
+      await user.click(screen.getByRole("button", { name: "1 item toevoegen" }));
+
+      await waitFor(() => expect(fake.added).toEqual([{ recipeId: 42, names: ["pasta"] }]));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(await screen.findByText("1 item in je mandje")).toBeInTheDocument();
+      expect(useRouter().refresh).toHaveBeenCalled();
     });
 
-    it("disables the basket button while the add is pending", async () => {
+    it("says per ingredient what the list will do with it", async () => {
       const user = userEvent.setup();
-      let resolveAdd: () => void = () => {};
-      const pending = new Promise<void>((resolve) => {
-        resolveAdd = resolve;
-      });
-      const fake = fakeActions();
-      fake.onAddToBasket = async () => {
-        await pending;
-        fake.addedToBasket.push(1);
-      };
-      renderDetail(aRecipe(), fake);
+      renderDetail(
+        aRecipe({
+          ingredients: [
+            { name: "pasta", quantity: 200, unit: "g" },
+            { name: "kaas", quantity: 1, unit: "stuk" },
+            { name: "ui", quantity: 1, unit: "bosje" },
+            { name: "zout", quantity: null, unit: null },
+          ],
+          listRows: [
+            aRow({ id: 1, name: "pasta", quantity: 200, unit: "g" }),
+            aRow({ id: 2, name: "kaas", quantity: 1, unit: "stuk", bought: true }),
+            aRow({ id: 3, name: "ui", quantity: 1, unit: "handje" }),
+          ],
+        })
+      );
 
-      const button = screen.getByRole("button", { name: /in mandje/i });
+      await user.click(screen.getByRole("button", { name: "In mandje" }));
+
+      expect(within(sheet()).getByText("staat al op de lijst · wordt 400 g")).toBeInTheDocument();
+      expect(
+        within(sheet()).getByText("al gekocht · komt opnieuw op de lijst")
+      ).toBeInTheDocument();
+      expect(
+        within(sheet()).getByText("staat al op de lijst als 1 handje · wordt niet opgeteld")
+      ).toBeInTheDocument();
+      expect(within(sheet()).getByRole("checkbox", { name: /zout/ })).not.toHaveTextContent(
+        "staat al"
+      );
+    });
+
+    it("cannot confirm with nothing ticked", async () => {
+      const user = userEvent.setup();
+      renderDetail(aRecipe({ ingredients: [{ name: "pasta", quantity: null, unit: null }] }));
+
+      await user.click(screen.getByRole("button", { name: "In mandje" }));
+      await user.click(within(sheet()).getByRole("checkbox", { name: /pasta/ }));
+
+      expect(screen.getByRole("button", { name: "0 items toevoegen" })).toBeDisabled();
+    });
+
+    it("reads 'Op de lijst' when every ingredient is already there unbought, and still opens the sheet", async () => {
+      const user = userEvent.setup();
+      renderDetail(
+        aRecipe({ listRows: [aRow({ id: 1, name: "pasta" }), aRow({ id: 2, name: "pesto" })] })
+      );
+
+      const button = screen.getByRole("button", { name: "Op de lijst" });
       await user.click(button);
 
-      expect(button).toBeDisabled();
-
-      resolveAdd();
-      await waitFor(() => expect(button).toBeEnabled());
+      expect(sheet()).toBeInTheDocument();
     });
 
-    it("reads 'Al in mandje' straight away when the server already says onList", () => {
-      renderDetail(aRecipe({ onList: true }));
-
-      expect(screen.getByRole("button", { name: "Al in mandje" })).toBeInTheDocument();
-    });
-
-    it("asks for confirmation before adding again when already on the list", async () => {
+    it("keeps the sheet open and toasts when the add fails", async () => {
       const user = userEvent.setup();
-      const fake = renderDetail(aRecipe({ id: 7, onList: true }));
+      const fake = fakeActions();
+      fake.rejectAdd();
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        renderDetail(aRecipe(), fake);
 
-      await user.click(screen.getByRole("button", { name: "Al in mandje" }));
+        await user.click(screen.getByRole("button", { name: "In mandje" }));
+        await user.click(screen.getByRole("button", { name: "2 items toevoegen" }));
 
-      expect(screen.getByText("Nog een keer toevoegen?")).toBeInTheDocument();
-      expect(fake.addedToBasket).toEqual([]);
-
-      await user.click(screen.getByRole("button", { name: "Toevoegen" }));
-      expect(fake.addedToBasket).toEqual([7]);
-    });
-
-    it("cancelling the confirmation adds nothing", async () => {
-      const user = userEvent.setup();
-      const fake = renderDetail(aRecipe({ onList: true }));
-
-      await user.click(screen.getByRole("button", { name: "Al in mandje" }));
-      await user.click(screen.getByRole("button", { name: "Annuleren" }));
-
-      expect(fake.addedToBasket).toEqual([]);
+        expect(await screen.findByText("Toevoegen mislukt")).toBeInTheDocument();
+        expect(sheet()).toBeInTheDocument();
+        expect(consoleError).toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
     });
   });
 
-  describe("shared ingredients", () => {
-    it("loads and lists recipes sharing an ingredient, with a link to each", async () => {
+  describe("the ⋯ menu", () => {
+    it("offers editing", async () => {
       const user = userEvent.setup();
-      const fake = fakeActions([{ id: 2, title: "Tomatensoep", ingredientNames: ["pasta", "ui"] }]);
-      renderDetail(aRecipe(), fake);
+      renderDetail(aRecipe({ id: 9 }));
 
-      await user.click(
-        screen.getByRole("button", { name: "Deelt ingrediënten met andere recepten" })
+      await user.click(screen.getByRole("button", { name: "Meer" }));
+
+      expect(screen.getByRole("menuitem", { name: "Bewerken" })).toHaveAttribute(
+        "href",
+        "/recepten/9/bewerken"
       );
-
-      expect(fake.suggestionsRequestedFor).toEqual([1]);
-      expect(await screen.findByText("Tomatensoep")).toBeInTheDocument();
-      expect(screen.getByText("deelt: pasta")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /Bekijken/ })).toHaveAttribute("href", "/recepten/2");
     });
 
-    it("shows the empty state when nothing shares an ingredient", async () => {
+    it("deletes after confirmation and goes back to the list", async () => {
       const user = userEvent.setup();
-      renderDetail(aRecipe(), fakeActions([]));
+      const fake = renderDetail(aRecipe({ id: 9 }));
 
-      await user.click(
-        screen.getByRole("button", { name: "Deelt ingrediënten met andere recepten" })
-      );
+      await user.click(screen.getByRole("button", { name: "Meer" }));
+      await user.click(screen.getByRole("menuitem", { name: "Verwijderen" }));
+      expect(screen.getByText("Pasta pesto verwijderen?")).toBeInTheDocument();
+      expect(fake.deleted).toEqual([]);
 
-      expect(
-        await screen.findByText("Nog geen recept dat ingrediënten deelt met dit recept")
-      ).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Verwijderen" }));
+
+      await waitFor(() => expect(fake.deleted).toEqual([9]));
+      expect(useRouter().push).toHaveBeenCalledWith("/recepten");
+    });
+
+    it("cancelling the confirmation deletes nothing", async () => {
+      const user = userEvent.setup();
+      const fake = renderDetail();
+
+      await user.click(screen.getByRole("button", { name: "Meer" }));
+      await user.click(screen.getByRole("menuitem", { name: "Verwijderen" }));
+      await user.click(screen.getByRole("button", { name: "Annuleren" }));
+
+      expect(fake.deleted).toEqual([]);
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
   });
 });

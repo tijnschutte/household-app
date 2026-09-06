@@ -214,6 +214,14 @@ Repo-wide:
 - `typecheck` does not validate that a server action survives serialization
   across the RSC boundary. Only `bun run build` does. Run it after changing how
   actions reach a client component.
+- Never run `tsc` while `next build` is running: the build regenerates
+  `.next/types`, and `tsconfig.json` includes it, so typecheck fails with
+  "File ... not found" that has nothing to do with the code.
+- A `next start` left behind (Playwright's, or your own) keeps port 3100 and
+  keeps serving a build directory that a later `next build` has replaced: CSS
+  and chunks come back 500 and every screen renders unstyled or as "This page
+  couldn't load". `pkill -f "next start"` misses it; free the port with
+  `lsof -ti :3100 | xargs kill` before starting another server.
 
 In tests:
 
@@ -228,6 +236,15 @@ In tests:
 - A collapsed element is often still in the DOM. The clear-basket bar animates
   via Tailwind height/opacity, so `queryByText` finds it either way — assert on
   the behaviour (clearing an empty basket deletes nothing) rather than presence.
+- Calling `element.focus()` during React's commit — from a `useEffect`, or via
+  `autoFocus` on a freshly mounted element — makes happy-dom trip React's
+  "A component suspended inside an `act` scope" warning, which the console
+  guard turns into a failure. Focus from the event handler instead: the
+  element that already exists synchronously, a row that is about to mount from
+  a `queueMicrotask` (a key press is a discrete event, so React has committed
+  by then). `recepten/step-editor.tsx` is the worked example.
+- `waitForLoadState("networkidle")` never resolves in this app: the home
+  screen polls. Wait for an element, not for the network.
 
 In server actions:
 

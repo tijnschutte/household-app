@@ -34,7 +34,7 @@ async function aRecipe(householdId: number, title: string, lines: RecipeLine[] =
     data: {
       householdId,
       title,
-      instructions: "",
+      steps: [],
       ingredients: {
         create: ingredients.map((ingredient, index) => ({
           ingredientId: ingredient.id,
@@ -45,6 +45,15 @@ async function aRecipe(householdId: number, title: string, lines: RecipeLine[] =
       },
     },
   });
+}
+
+/** Every ingredient on a recipe, as the sheet hands them over when nothing is unticked. */
+async function namesOf(recipe: { id: number }): Promise<string[]> {
+  const lines = await db.recipeIngredient.findMany({
+    where: { recipeId: recipe.id },
+    include: { ingredient: true },
+  });
+  return lines.map((line) => line.ingredient.name);
 }
 
 async function twoHouseholds() {
@@ -79,7 +88,7 @@ describe("recipes are confined to the caller's household", () => {
     signInAs(theirs.member);
     const result = await updateRecipe(recipe.id, {
       title: "Gekaapt",
-      instructions: "",
+      steps: [],
       ingredients: [{ name: "pasta", quantity: null, unit: null }],
       tags: [],
     });
@@ -106,7 +115,7 @@ describe("recipes are confined to the caller's household", () => {
     signInAs(member);
     const result = await updateRecipe(999_999, {
       title: "Onbestaand",
-      instructions: "",
+      steps: [],
       ingredients: [{ name: "ui", quantity: null, unit: null }],
       tags: [],
     });
@@ -115,39 +124,55 @@ describe("recipes are confined to the caller's household", () => {
   });
 });
 
-describe("getRecipe reports onList (D2)", () => {
+describe("getRecipe carries the shared list's rows for its ingredients", () => {
+  it("includes bought and unbought rows for the recipe's ingredients only", async () => {
+    const { household, member } = await aHouseholdWith("sam");
+    const recipe = await aRecipe(household.id, "Pasta pesto", [
+      { name: "pasta" },
+      { name: "kaas" },
+    ]);
+    await aGrocery({ householdId: household.id }, { name: "pasta" });
+    await aGrocery({ householdId: household.id }, { name: "kaas", bought: true });
+    await aGrocery({ householdId: household.id }, { name: "boter" });
+
+    signInAs(member);
+    const detail = await getRecipe(recipe.id);
+
+    expect(detail?.listRows.map((row) => [row.name, row.bought]).sort()).toEqual([
+      ["kaas", true],
+      ["pasta", false],
+    ]);
+  });
+
+  it("never includes another household's rows", async () => {
+    const { ours, theirs } = await twoHouseholds();
+    const recipe = await aRecipe(ours.household.id, "Pasta pesto", [{ name: "pasta" }]);
+    await aGrocery({ householdId: theirs.household.id }, { name: "pasta" });
+
+    signInAs(ours.member);
+
+    expect((await getRecipe(recipe.id))?.listRows).toEqual([]);
+  });
+});
+
+describe("getRecipes reports onList per recipe", () => {
   it("is true once every ingredient is on the shared list and not bought", async () => {
     const { household, member } = await aHouseholdWith("sam");
-    const recipe = await aRecipe(household.id, "Pasta pesto", [
-      { name: "pasta" },
-      { name: "kaas" },
-    ]);
+    await aRecipe(household.id, "Compleet", [{ name: "pasta" }, { name: "kaas" }]);
+    await aRecipe(household.id, "Half", [{ name: "pasta" }, { name: "ui" }]);
+    await aRecipe(household.id, "Gekocht", [{ name: "boter" }]);
     await aGrocery({ householdId: household.id }, { name: "pasta" });
     await aGrocery({ householdId: household.id }, { name: "kaas" });
+    await aGrocery({ householdId: household.id }, { name: "boter", bought: true });
 
     signInAs(member);
-    expect(await getRecipe(recipe.id)).toMatchObject({ onList: true });
-  });
+    const recipes = await getRecipes();
 
-  it("is false while an ingredient is missing from the list", async () => {
-    const { household, member } = await aHouseholdWith("sam");
-    const recipe = await aRecipe(household.id, "Pasta pesto", [
-      { name: "pasta" },
-      { name: "kaas" },
+    expect(recipes.map((recipe) => [recipe.title, recipe.onList])).toEqual([
+      ["Compleet", true],
+      ["Gekocht", false],
+      ["Half", false],
     ]);
-    await aGrocery({ householdId: household.id }, { name: "pasta" });
-
-    signInAs(member);
-    expect(await getRecipe(recipe.id)).toMatchObject({ onList: false });
-  });
-
-  it("is false while an ingredient on the list is already bought", async () => {
-    const { household, member } = await aHouseholdWith("sam");
-    const recipe = await aRecipe(household.id, "Pasta pesto", [{ name: "pasta" }]);
-    await aGrocery({ householdId: household.id }, { name: "pasta", bought: true });
-
-    signInAs(member);
-    expect(await getRecipe(recipe.id)).toMatchObject({ onList: false });
   });
 });
 
@@ -159,7 +184,7 @@ describe("createRecipe / updateRecipe reject a duplicate title", () => {
     signInAs(member);
     const result = await createRecipe({
       title: "Pasta pesto",
-      instructions: "",
+      steps: [],
       ingredients: [{ name: "pasta", quantity: null, unit: null }],
       tags: [],
     });
@@ -174,7 +199,7 @@ describe("createRecipe / updateRecipe reject a duplicate title", () => {
     signInAs(theirs.member);
     const result = await createRecipe({
       title: "Pasta pesto",
-      instructions: "",
+      steps: [],
       ingredients: [{ name: "pasta", quantity: null, unit: null }],
       tags: [],
     });
@@ -190,7 +215,7 @@ describe("createRecipe / updateRecipe reject a duplicate title", () => {
     signInAs(member);
     const result = await updateRecipe(toRename.id, {
       title: "Bestaat al",
-      instructions: "",
+      steps: [],
       ingredients: [{ name: "ui", quantity: null, unit: null }],
       tags: [],
     });
@@ -207,7 +232,7 @@ describe("addRecipeToBasket", () => {
     ]);
 
     signInAs(member);
-    await addRecipeToBasket(recipe.id);
+    await addRecipeToBasket(recipe.id, await namesOf(recipe));
 
     const row = await db.grocery.findFirst({ where: { householdId: household.id, name: "pasta" } });
     expect(row).toMatchObject({ quantity: expect.anything(), unit: "gram", bought: false });
@@ -226,7 +251,7 @@ describe("addRecipeToBasket", () => {
     ]);
 
     signInAs(member);
-    await addRecipeToBasket(recipe.id);
+    await addRecipeToBasket(recipe.id, await namesOf(recipe));
 
     const row = await db.grocery.findFirst({ where: { householdId: household.id, name: "pasta" } });
     expect(Number(row!.quantity)).toBe(300);
@@ -244,7 +269,7 @@ describe("addRecipeToBasket", () => {
     ]);
 
     signInAs(member);
-    await addRecipeToBasket(recipe.id);
+    await addRecipeToBasket(recipe.id, await namesOf(recipe));
 
     const row = await db.grocery.findFirst({ where: { householdId: household.id, name: "pasta" } });
     expect(row).toMatchObject({ bought: false });
@@ -263,11 +288,25 @@ describe("addRecipeToBasket", () => {
     ]);
 
     signInAs(member);
-    await addRecipeToBasket(recipe.id);
+    await addRecipeToBasket(recipe.id, await namesOf(recipe));
 
     const row = await db.grocery.findFirst({ where: { householdId: household.id, name: "pasta" } });
     expect(Number(row!.quantity)).toBe(1);
     expect(row!.unit).toBe("pak");
+  });
+
+  it("adds only the ingredients that were chosen", async () => {
+    const { household, member } = await aHouseholdWith("sam");
+    const recipe = await aRecipe(household.id, "Pasta pesto", [
+      { name: "pasta" },
+      { name: "zout" },
+    ]);
+
+    signInAs(member);
+    await addRecipeToBasket(recipe.id, ["pasta", "niet-van-dit-recept"]);
+
+    const names = await db.grocery.findMany({ where: { householdId: household.id } });
+    expect(names.map((row) => row.name)).toEqual(["pasta"]);
   });
 
   it("refuses to add another household's recipe to the caller's list", async () => {
@@ -276,7 +315,7 @@ describe("addRecipeToBasket", () => {
 
     signInAs(theirs.member);
 
-    await expect(addRecipeToBasket(recipe.id)).rejects.toThrow();
+    await expect(addRecipeToBasket(recipe.id, await namesOf(recipe))).rejects.toThrow();
     expect(await db.grocery.count({ where: { householdId: theirs.household.id } })).toBe(0);
   });
 
@@ -286,7 +325,7 @@ describe("addRecipeToBasket", () => {
       const recipe = await aRecipe(household.id, "Pasta pesto", [{ name: "pasta" }]);
 
       signInAs(member);
-      await addRecipeToBasket(recipe.id);
+      await addRecipeToBasket(recipe.id, await namesOf(recipe));
 
       const row = await db.grocery.findFirst({
         where: { householdId: household.id, name: "pasta" },
@@ -301,7 +340,7 @@ describe("addRecipeToBasket", () => {
       const recipe = await aRecipe(household.id, "Pasta pesto", [{ name: "pasta" }]);
 
       signInAs(member);
-      await addRecipeToBasket(recipe.id);
+      await addRecipeToBasket(recipe.id, await namesOf(recipe));
 
       const row = await db.grocery.findUnique({ where: { id: handTyped.id } });
       expect(row?.sourceRecipeId).toBe(recipe.id);
@@ -313,8 +352,8 @@ describe("addRecipeToBasket", () => {
       const second = await aRecipe(household.id, "Pasta carbonara", [{ name: "pasta" }]);
 
       signInAs(member);
-      await addRecipeToBasket(first.id);
-      await addRecipeToBasket(second.id);
+      await addRecipeToBasket(first.id, await namesOf(first));
+      await addRecipeToBasket(second.id, await namesOf(second));
 
       const row = await db.grocery.findFirst({
         where: { householdId: household.id, name: "pasta" },
@@ -329,7 +368,7 @@ describe("addRecipeToBasket", () => {
       ]);
 
       signInAs(member);
-      await addRecipeToBasket(recipe.id);
+      await addRecipeToBasket(recipe.id, await namesOf(recipe));
       await db.recipe.delete({ where: { id: recipe.id } });
 
       const row = await db.grocery.findFirst({

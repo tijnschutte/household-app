@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireMembership } from "@/src/lib/membership/gate";
 import { getIngredientNames, getRecipe, getRecipeTags } from "@/src/lib/recepten/data";
-import { deleteRecipe, updateRecipe } from "@/src/lib/recepten/actions";
+import { updateRecipe } from "@/src/lib/recepten/actions";
 import RecipeForm from "@/src/components/recepten/recipe-form";
 
 export default async function BewerkReceptPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,10 +31,6 @@ export default async function BewerkReceptPage({ params }: { params: Promise<{ i
         return result.success
           ? { success: true, message: result.message, value: { id: recipeId } }
           : result;
-      }}
-      onDelete={async () => {
-        "use server";
-        await deleteRecipe(recipeId);
       }}
     />
   );

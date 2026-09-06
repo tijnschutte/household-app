@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireMembership } from "@/src/lib/membership/gate";
-import { getRecipe, getRecipesForSuggestions } from "@/src/lib/recepten/data";
-import { addRecipeToBasket } from "@/src/lib/recepten/actions";
+import { getRecipe } from "@/src/lib/recepten/data";
+import { addRecipeToBasket, deleteRecipe } from "@/src/lib/recepten/actions";
 import RecipeDetailClient from "@/src/components/recepten/recipe-detail-client";
 
 export default async function ReceptDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,13 +14,6 @@ export default async function ReceptDetailPage({ params }: { params: Promise<{ i
   }
 
   return (
-    <RecipeDetailClient
-      recipe={recipe}
-      onAddToBasket={addRecipeToBasket}
-      onLoadSuggestions={async (recipeId) => {
-        "use server";
-        return getRecipesForSuggestions(recipeId);
-      }}
-    />
+    <RecipeDetailClient recipe={recipe} onAddToBasket={addRecipeToBasket} onDelete={deleteRecipe} />
   );
 }

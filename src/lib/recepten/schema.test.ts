@@ -4,7 +4,7 @@ import { recipeSchema } from "@/src/lib/recepten/schema";
 function aRecipeInput(overrides: Record<string, unknown> = {}) {
   return {
     title: "Pasta pesto",
-    instructions: "Kook de pasta. Meng met pesto.",
+    steps: ["Kook de pasta.", "Meng met pesto."],
     ingredients: [{ name: "Pasta", quantity: 200, unit: "gram" }],
     tags: ["Snel"],
     ...overrides,
@@ -26,12 +26,20 @@ describe("recipeSchema", () => {
     expect(result.ingredients[0].name).toBe("ui");
   });
 
-  it("lowercases the unit", () => {
+  it("canonicalises the unit, so 'GRAM' and 'g' save as the same unit", () => {
     const result = recipeSchema.parse(
       aRecipeInput({ ingredients: [{ name: "ui", quantity: 1, unit: "GRAM" }] })
     );
 
-    expect(result.ingredients[0].unit).toBe("gram");
+    expect(result.ingredients[0].unit).toBe("g");
+  });
+
+  it("reads a blank unit as none", () => {
+    const result = recipeSchema.parse(
+      aRecipeInput({ ingredients: [{ name: "ui", quantity: 1, unit: "  " }] })
+    );
+
+    expect(result.ingredients[0].unit).toBeNull();
   });
 
   it("rejects a second ingredient line with the same normalised name", () => {
@@ -66,14 +74,28 @@ describe("recipeSchema", () => {
     }
   });
 
-  it("rejects instructions over 5000 characters", () => {
-    expect(recipeSchema.safeParse(aRecipeInput({ instructions: "a".repeat(5001) })).success).toBe(
-      false
+  it("drops blank steps and trims the rest", () => {
+    const result = recipeSchema.parse(
+      aRecipeInput({ steps: ["  Kook de pasta.  ", "", "   ", "Meng met pesto."] })
     );
+
+    expect(result.steps).toEqual(["Kook de pasta.", "Meng met pesto."]);
   });
 
-  it("accepts empty instructions", () => {
-    expect(recipeSchema.safeParse(aRecipeInput({ instructions: "" })).success).toBe(true);
+  it("accepts a recipe with no steps at all", () => {
+    expect(recipeSchema.safeParse(aRecipeInput({ steps: [] })).success).toBe(true);
+  });
+
+  it("rejects a step over 1000 characters", () => {
+    expect(recipeSchema.safeParse(aRecipeInput({ steps: ["a".repeat(1001)] })).success).toBe(false);
+  });
+
+  it("rejects more than 50 steps, blank ones not counted", () => {
+    const fifty = Array.from({ length: 50 }, (_, i) => `Stap ${i}`);
+    expect(recipeSchema.safeParse(aRecipeInput({ steps: [...fifty, ""] })).success).toBe(true);
+    expect(recipeSchema.safeParse(aRecipeInput({ steps: [...fifty, "Stap 51"] })).success).toBe(
+      false
+    );
   });
 
   it("rejects a recipe with no ingredients", () => {

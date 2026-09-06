@@ -165,7 +165,9 @@ model Recipe {
   householdId  Int
   household    Household          @relation(fields: [householdId], references: [id])
   title        String
-  instructions String
+  // The method, one step per element, in cooking order. An array rather than
+  // a table: a step has no life outside its recipe and nothing but its text.
+  steps        String[]           @default([])
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @default(now()) @updatedAt
   ingredients  RecipeIngredient[]

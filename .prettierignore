@@ -12,3 +12,6 @@ playwright-report/
 # Vendored agent content — upstream copies we consume, not code we style.
 .claude/skills/
 docs/engineering-principles.md
+
+# Design mockups: throwaway HTML assembled by docs/design/*/build.sh, not code we style.
+docs/design/
