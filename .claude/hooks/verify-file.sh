@@ -24,6 +24,17 @@ if ! out=$(bunx tsc --noEmit --incremental 2>&1); then
   messages+=("typecheck errors:"$'\n'"$out")
 fi
 
+# Unit tests that import the edited file (or the file itself, if it is a test).
+# React reports a missing key, bad nesting or an un-acted update through
+# console.error, which tests/setup.ts turns into a failure, so this is where an
+# agent sees a runtime React error without a dev server. The `dot` reporter
+# keeps a green run to one line; a red run prints every failure in full.
+if [[ "$file" =~ ^"$PWD"/(src|tests)/.*\.tsx?$ ]]; then
+  if ! out=$(bunx vitest related --project unit --passWithNoTests --reporter dot "$file" 2>&1); then
+    messages+=("related unit tests failed:"$'\n'"$out")
+  fi
+fi
+
 if [[ ${#messages[@]} -gt 0 ]]; then
   reason=$(printf '%s\n\n' "${messages[@]}")
   jq -n --arg reason "$reason" '{decision: "block", reason: $reason, hookSpecificOutput: {hookEventName: "PostToolUse"}}'

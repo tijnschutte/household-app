@@ -41,9 +41,11 @@ dependencies are already accounted for, and a new entry usually means the code
 is genuinely dead.
 
 A PostToolUse hook (`.claude/hooks/verify-file.sh`) already runs prettier,
-eslint and tsc on every file you Write or Edit, so `bun run verify` should
-usually pass first time. It does not run `arch` — that is per-graph, not
-per-file, so an import boundary you broke only shows up here or at commit time.
+eslint and tsc on every file you Write or Edit, and for a file under `src/` or
+`tests/` it then runs the unit tests that import it (`vitest related`), so
+`bun run verify` should usually pass first time. It does not run `arch` — that
+is per-graph, not per-file, so an import boundary you broke only shows up here
+or at commit time.
 
 ## Running it
 
@@ -75,6 +77,12 @@ bunx vitest run src/lib/geld/money.test.ts
 the App Router hooks — a component that navigates gets a working `useRouter`,
 and a test asserts on it by importing `useRouter` from `next/navigation`.
 Nothing there stands in for our own code.
+
+It also fails any unit test that lets `console.error` or `console.warn` through
+(`vitest-fail-on-console`), which is how a missing `key`, invalid DOM nesting or
+an update outside `act` surfaces — React reports those by logging, not throwing.
+A test that deliberately drives a logged failure owns the log:
+`vi.spyOn(console, "error").mockImplementation(() => {})`, assert on it, restore.
 
 Two limits. **Async Server Components cannot be rendered** by Testing Library,
 so `src/app/**/page.tsx` is out of reach — that is what Playwright is for.

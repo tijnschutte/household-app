@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import NotificationSettings from "./notification-settings";
@@ -117,6 +117,7 @@ describe("NotificationSettings", () => {
   });
 
   it("puts the switch back when saving fails, so it never lies about what is stored", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
     renderSettings({
       onSetTopicMuted: async () => {
         throw new Error("offline");
@@ -126,6 +127,11 @@ describe("NotificationSettings", () => {
     await userEvent.click(topicSwitch("Nieuwe boodschap"));
 
     await waitFor(() => expect(topicSwitch("Nieuwe boodschap")).toBeChecked());
+    expect(reported).toHaveBeenCalledWith(
+      "Failed to save notification preference:",
+      expect.any(Error)
+    );
+    reported.mockRestore();
   });
 
   it("disables the device switch when the browser cannot receive push at all", async () => {

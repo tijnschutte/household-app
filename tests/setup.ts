@@ -10,6 +10,18 @@
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
+import failOnConsole from "vitest-fail-on-console";
+
+/**
+ * React reports a missing key, invalid DOM nesting or an un-acted update through
+ * console.error, not by throwing, so without this a suite can be green while the
+ * component is wrong. A test that expects a message asserts on a console spy.
+ *
+ * Registered before `cleanup` on purpose: afterEach hooks run last-in first-out,
+ * and a failing hook skips the rest, so the guard failing must not leave the
+ * previous render mounted for the next test to trip over.
+ */
+failOnConsole({ shouldFailOnError: true, shouldFailOnWarn: true });
 
 /** Testing Library keeps the previous render mounted unless it is told otherwise. */
 afterEach(cleanup);

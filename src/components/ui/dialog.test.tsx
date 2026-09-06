@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import { Dialog, DialogContent, DialogTitle } from "./dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./dialog";
 
 /**
  * A stand-in for window.visualViewport, which no test DOM implements. It is the
@@ -38,6 +38,7 @@ function renderDialog() {
     <Dialog open>
       <DialogContent>
         <DialogTitle>Categorie aanmaken</DialogTitle>
+        <DialogDescription>Geef de categorie een naam.</DialogDescription>
       </DialogContent>
     </Dialog>
   );

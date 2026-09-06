@@ -51,11 +51,14 @@ describe("ModuleSettings", () => {
   });
 
   it("puts the switch back when saving fails, so it never lies about what is stored", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
     render(<ModuleSettings hiddenModules={[]} {...aServerThat({ fails: true })} />);
 
     await userEvent.click(screen.getByRole("switch", { name: "Geld" }));
 
     await waitFor(() => expect(screen.getByRole("switch", { name: "Geld" })).toBeChecked());
+    expect(reported).toHaveBeenCalledWith("Failed to save module preference:", expect.any(Error));
+    reported.mockRestore();
   });
 
   it("asks for a re-render, because the bar it changes lives in the layout", async () => {
