@@ -72,10 +72,12 @@ export async function getGeldMonth(month: string): Promise<GeldMonth> {
       : null,
   });
 
-  const contributions = items
-    .filter((item) => item.kind === RecurringKind.CONTRIBUTION)
-    .map(toGeldItem);
-  const expenses = items.filter((item) => item.kind === RecurringKind.EXPENSE).map(toGeldItem);
+  const contributions: GeldItem[] = [];
+  const expenses: GeldItem[] = [];
+  for (const item of items) {
+    const bucket = item.kind === RecurringKind.CONTRIBUTION ? contributions : expenses;
+    bucket.push(toGeldItem(item));
+  }
 
   // All-time balance: sum of every month's (contributions - expenses +
   // adjustments) for the household, not just this month.

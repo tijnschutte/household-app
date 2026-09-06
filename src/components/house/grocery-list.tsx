@@ -7,11 +7,10 @@ import {
   categoryDropId,
   UNCATEGORIZED_DROP_ID,
 } from "@/src/lib/house/grocery-order";
-import { MAX_ITEM_NAME_LENGTH, type GroceryWithCategory } from "@/src/lib/house/grocery-view";
-import { formatQuantity } from "@/src/lib/quantity";
-import { ShoppingCart, Trash2, Pencil, GripVertical, Check, Plus } from "lucide-react";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { Input } from "../ui/input";
+import { type GroceryWithCategory } from "@/src/lib/house/grocery-view";
+import { ShoppingCart, Trash2, Plus } from "lucide-react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { GroceryRow } from "./grocery-row";
 import {
   DndContext,
   DragEndEvent,
@@ -22,7 +21,6 @@ import {
   useSensor,
   useSensors,
   closestCorners,
-  useDraggable,
   useDroppable,
 } from "@dnd-kit/core";
 import { Button } from "../ui/button";
@@ -57,329 +55,6 @@ type GroceryListProps = {
   onBusyChange: (busy: boolean) => void;
 };
 
-// The leading round checkbox: purely visual (a bordered circle, filled with a
-// Check icon when bought), the whole row is the actual tap target.
-function CheckCircle({ bought }: { bought: boolean }) {
-  return (
-    <div
-      className={`
-        h-[22px] w-[22px] flex-shrink-0 rounded-full border-[1.5px] flex items-center justify-center transition-colors
-        ${bought ? "bg-primary border-primary" : "border-gray-300"}
-      `}
-    >
-      {bought && <Check className="w-3.5 h-3.5 text-primary-foreground" strokeWidth={3} />}
-    </div>
-  );
-}
-
-// Width of the red "Verwijderen" action revealed by swiping a row left.
-const SWIPE_ACTION_WIDTH = 96;
-// A gesture must move this many px before we decide it's a swipe or a scroll.
-const SWIPE_INTENT_THRESHOLD = 12;
-
-function DraggableGroceryItem({
-  item,
-  onToggleBought,
-  onRename,
-  onDelete,
-  onEditingChange,
-}: {
-  item: GroceryWithCategory;
-  onToggleBought: () => void;
-  onRename: (newName: string) => void;
-  onDelete: () => void;
-  onEditingChange?: (editing: boolean) => void;
-}) {
-  const bought = item.bought ?? false;
-  const quantityLabel = formatQuantity(item.quantity, item.unit);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(item.name);
-  const inputRef = useRef<HTMLInputElement>(null);
-  // Checked rows can't be dragged (pointless mid-trip, avoids accidental
-  // drags) — disabled here (not just handle-hidden) so it holds even if
-  // something else ever renders a handle for a bought row.
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: item.id,
-    disabled: bought,
-  });
-
-  // Swipe-to-delete state. The gesture is tracked with pointer events on the
-  // row body only — the drag handle belongs to dnd-kit (its PointerSensor /
-  // TouchSensor listeners are attached to the handle element exclusively, so
-  // a horizontal swipe on the body can never start a drag). `touch-pan-y`
-  // on the row keeps native vertical scrolling working: the browser handles
-  // vertical pans itself and only lets horizontal movement reach us.
-  // The live offset is a ref, not state: following a finger is ~90 pointermove
-  // events, and React only ever needs to know the two things below — whether a
-  // gesture is running, and whether it ended open. The pixels are written
-  // straight to the node, and re-applied after any render that would drop them.
-  const rowRef = useRef<HTMLDivElement | null>(null);
-  const offsetRef = useRef(0);
-  const [isOpen, setIsOpen] = useState(false);
-  const [isSwiping, setIsSwiping] = useState(false);
-  const swipeRef = useRef({
-    startX: 0,
-    startY: 0,
-    baseX: 0,
-    pointerId: -1,
-    // idle → pending (pointer down) → swiping (horizontal intent) | cancelled (vertical intent)
-    mode: "idle" as "idle" | "pending" | "swiping" | "cancelled",
-  });
-  // Set when a swipe gesture just ended, so the click that the browser fires
-  // right after pointerup doesn't also toggle the item as bought.
-  const justSwipedRef = useRef(false);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
-
-  // Safe to leave to the node between renders: `style` below never sets
-  // transform unless dnd-kit is dragging, and React only writes the style
-  // properties it manages — so a poll re-rendering the row leaves this alone.
-  const applyOffset = () => {
-    const node = rowRef.current;
-    // While dnd-kit is dragging, the transform is its own — never fight it.
-    if (!node || transform) return;
-    node.style.transform = offsetRef.current === 0 ? "" : `translateX(${offsetRef.current}px)`;
-  };
-
-  /** The single way a revealed row goes back to rest. */
-  const close = () => {
-    offsetRef.current = 0;
-    applyOffset();
-    setIsOpen(false);
-  };
-
-  const startEditing = () => {
-    setIsEditing(true);
-    onEditingChange?.(true);
-  };
-
-  const stopEditing = () => {
-    setIsEditing(false);
-    onEditingChange?.(false);
-  };
-
-  const handleSave = () => {
-    // Length is the input's job (maxLength) and normalization the caller's, so
-    // all that is decided here is whether there is a change worth saving.
-    const trimmed = editValue.trim();
-    if (trimmed && trimmed !== item.name) {
-      onRename(trimmed);
-    } else {
-      setEditValue(item.name);
-    }
-    stopEditing();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSave();
-    } else if (e.key === "Escape") {
-      setEditValue(item.name);
-      stopEditing();
-    }
-  };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (!e.isPrimary) return;
-    // Gestures starting on the drag handle are dnd-kit's, not ours.
-    if ((e.target as HTMLElement).closest("[data-drag-handle]")) return;
-    const s = swipeRef.current;
-    s.startX = e.clientX;
-    s.startY = e.clientY;
-    s.baseX = offsetRef.current;
-    s.pointerId = e.pointerId;
-    s.mode = "pending";
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    const s = swipeRef.current;
-    if (e.pointerId !== s.pointerId) return;
-    if (s.mode !== "pending" && s.mode !== "swiping") return;
-
-    const dx = e.clientX - s.startX;
-    const dy = e.clientY - s.startY;
-
-    if (s.mode === "pending") {
-      // Vertical movement dominates: this is a scroll, leave it alone.
-      if (Math.abs(dy) > SWIPE_INTENT_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
-        s.mode = "cancelled";
-        return;
-      }
-      // Horizontal movement dominates: claim the gesture as a swipe.
-      if (Math.abs(dx) > SWIPE_INTENT_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
-        s.mode = "swiping";
-        setIsSwiping(true);
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      } else {
-        return;
-      }
-    }
-
-    // Track the finger: only leftward reveal, with a little overshoot room.
-    offsetRef.current = Math.min(0, Math.max(-SWIPE_ACTION_WIDTH - 24, s.baseX + dx));
-    applyOffset();
-  };
-
-  const settleSwipe = (e: React.PointerEvent) => {
-    const s = swipeRef.current;
-    if (e.pointerId !== s.pointerId) return;
-    if (s.mode === "swiping") {
-      justSwipedRef.current = true;
-      // Snap open when past half the action width, else snap back shut.
-      const open = offsetRef.current < -SWIPE_ACTION_WIDTH / 2;
-      offsetRef.current = open ? -SWIPE_ACTION_WIDTH : 0;
-      applyOffset();
-      setIsSwiping(false);
-      setIsOpen(open);
-    }
-    s.mode = "idle";
-    s.pointerId = -1;
-  };
-
-  const handlePointerCancel = (e: React.PointerEvent) => {
-    const s = swipeRef.current;
-    if (e.pointerId !== s.pointerId) return;
-    if (s.mode === "swiping") {
-      setIsSwiping(false);
-      close();
-    }
-    s.mode = "idle";
-    s.pointerId = -1;
-  };
-
-  const handleRowClick = () => {
-    // The click fired by the browser right after a swipe ends must not
-    // toggle the item.
-    if (justSwipedRef.current) {
-      justSwipedRef.current = false;
-      return;
-    }
-    // Tapping a row whose delete action is revealed closes it again.
-    if (isOpen) {
-      close();
-      return;
-    }
-    onToggleBought();
-  };
-
-  const style: React.CSSProperties = {
-    // Only dnd-kit's transform is set here; the swipe offset is written to the
-    // node by applyOffset, so following a finger costs no renders at all.
-    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-    transition: isSwiping || isDragging ? undefined : "transform 150ms ease-out",
-  };
-
-  if (isEditing) {
-    return (
-      <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-white ring-1 ring-primary">
-        <div className="h-[22px] w-[22px] flex-shrink-0" />
-        <Input
-          ref={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={handleKeyDown}
-          maxLength={MAX_ITEM_NAME_LENGTH}
-          className="h-7 text-base border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative overflow-hidden rounded-lg">
-      {/* Delete action revealed behind the row by swiping left. Kept
-          `invisible` (not just covered) while the row is at rest so it can
-          never bleed through the row, whatever the browser does with
-          stacking/paint of the translated row above it. */}
-      <button
-        onClick={() => {
-          close();
-          onDelete();
-        }}
-        tabIndex={isOpen ? 0 : -1}
-        aria-hidden={!isOpen}
-        className={`absolute inset-y-0 right-0 w-24 bg-destructive text-destructive-foreground text-sm font-medium flex items-center justify-center ${
-          isDragging ? "hidden" : ""
-        } ${!isOpen && !isSwiping ? "invisible" : ""}`}
-      >
-        Verwijderen
-      </button>
-      <div
-        data-row-body
-        ref={(node) => {
-          rowRef.current = node;
-          setNodeRef(node);
-        }}
-        style={style}
-        onClick={handleRowClick}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={settleSwipe}
-        onPointerCancel={handlePointerCancel}
-        className={`
-          relative flex items-center space-x-2 p-2.5 rounded-lg cursor-pointer group select-none touch-pan-y
-          bg-white transition-colors active:bg-gray-100
-          ${isDragging ? "opacity-0" : ""}
-        `}
-      >
-        <CheckCircle bought={bought} />
-        <div className="min-w-0 flex-1">
-          <span
-            className={`block truncate text-base first-letter:uppercase ${
-              bought ? "text-gray-400 line-through" : "text-gray-800 font-medium"
-            }`}
-          >
-            {item.name}
-          </span>
-          {/* The recipe this row's quantity most recently came from — a
-              hand-typed item, or one that predates D1, carries none. */}
-          {item.sourceRecipeTitle && (
-            <span className="block truncate text-xs text-gray-400 first-letter:uppercase">
-              {item.sourceRecipeTitle}
-            </span>
-          )}
-        </div>
-        {quantityLabel && (
-          <span className="shrink-0 text-sm text-gray-400 tabular-nums">{quantityLabel}</span>
-        )}
-        {/* Checked rows stay minimal: circle + struck name only. Renaming a
-            checked item is pointless, and it can't be dragged (see
-            `disabled: bought` above) so the handle is hidden too. Swipe
-            still works — it's wired on the row body, not these buttons. */}
-        {!bought && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              startEditing();
-            }}
-            aria-label={`${item.name} hernoemen`}
-            className="h-11 w-11 -my-2 flex items-center justify-center hover:bg-gray-100 rounded shrink-0"
-          >
-            <Pencil className="w-3.5 h-3.5 text-gray-400" />
-          </button>
-        )}
-        {!bought && (
-          <div
-            {...listeners}
-            {...attributes}
-            data-drag-handle
-            className="h-11 w-11 -my-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="w-4 h-4" />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /**
  * What can be done to a row, supplied once by GroceryList.
  *
@@ -406,7 +81,7 @@ function GroceryRows({ items }: { items: GroceryWithCategory[] }) {
   if (!actions) throw new Error("GroceryRows rendered outside GroceryList");
 
   return items.map((item) => (
-    <DraggableGroceryItem
+    <GroceryRow
       key={item.id}
       item={item}
       onToggleBought={() => actions.onToggleBought(item.id, !(item.bought ?? false))}
@@ -567,14 +242,17 @@ export default function GroceryList({
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const editingIdsRef = useRef<Set<number>>(new Set());
 
-  const handleItemEditingChange = (id: number, editing: boolean) => {
-    if (editing) {
-      editingIdsRef.current.add(id);
-    } else {
-      editingIdsRef.current.delete(id);
-    }
-    onBusyChange(activeDragId !== null || editingIdsRef.current.size > 0);
-  };
+  const handleItemEditingChange = useCallback(
+    (id: number, editing: boolean) => {
+      if (editing) {
+        editingIdsRef.current.add(id);
+      } else {
+        editingIdsRef.current.delete(id);
+      }
+      onBusyChange(activeDragId !== null || editingIdsRef.current.size > 0);
+    },
+    [activeDragId, onBusyChange]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -607,12 +285,17 @@ export default function GroceryList({
     onDragEnd(active.id as number, resolveDropCategory(over.id.toString(), groceryList));
   };
 
-  const rowActions: RowActions = {
-    onToggleBought,
-    onRenameItem,
-    onDeleteItem,
-    onItemEditingChange: handleItemEditingChange,
-  };
+  // One object for as long as its parts hold still, so a poll that changes
+  // nothing the rows act on does not redraw every row through the context.
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      onToggleBought,
+      onRenameItem,
+      onDeleteItem,
+      onItemEditingChange: handleItemEditingChange,
+    }),
+    [onToggleBought, onRenameItem, onDeleteItem, handleItemEditingChange]
+  );
 
   // A non-empty category asks for confirmation first; an empty one (counting
   // bought items too — they'd silently lose their category) deletes directly.

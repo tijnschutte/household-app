@@ -57,7 +57,7 @@ export function visibleTabs(hiddenModules: OptionalModule[]): ModuleTab[] {
   // Bound as `name`, not `module`: Next reserves that identifier.
   return [
     CORE_TAB,
-    ...ALL_MODULES.filter((name) => !hidden.has(name)).map((name) => OPTIONAL_MODULES[name]),
+    ...ALL_MODULES.flatMap((name) => (hidden.has(name) ? [] : [OPTIONAL_MODULES[name]])),
   ];
 }
 

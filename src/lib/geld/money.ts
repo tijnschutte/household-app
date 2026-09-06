@@ -45,16 +45,21 @@ export function isValidMonth(month: string): boolean {
   return MONTH_RE.test(month);
 }
 
+const amsterdamYearMonth = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Amsterdam",
+  year: "numeric",
+  month: "2-digit",
+});
+
 /** Current "YYYY-MM" in the Europe/Amsterdam timezone. */
 export function currentMonth(): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Amsterdam",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(new Date());
-  const year = parts.find((p) => p.type === "year")!.value;
-  const month = parts.find((p) => p.type === "month")!.value;
-  return `${year}-${month}`;
+  const parts = amsterdamYearMonth.formatToParts(new Date());
+  const year = parts.find((p) => p.type === "year");
+  const month = parts.find((p) => p.type === "month");
+  if (!year || !month) {
+    throw new Error(`Intl returned no year/month part for today: ${JSON.stringify(parts)}`);
+  }
+  return `${year.value}-${month.value}`;
 }
 
 /** Shifts a "YYYY-MM" string by `delta` months (can be negative). */

@@ -4,7 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { cn } from "@/src/lib/utils";
-import { buttonVariants } from "@/src/components/ui/button";
+import { buttonVariants } from "@/src/components/ui/button-variants";
 import { useVisualViewportCenter } from "@/src/components/ui/use-visual-viewport";
 
 // Built on the plain Dialog primitive instead of Radix AlertDialog: tapping

@@ -185,6 +185,17 @@ describe("BeheerSheet", () => {
       // The sheet auto-opens the add dialog, so the form is there without a click.
       expect(screen.getByLabelText("Naam")).toBeInTheDocument();
     });
+
+    it("starts from an empty form again after the user backed out", async () => {
+      renderSheet({ items: [] });
+
+      await openAddDialog();
+      await userEvent.type(screen.getByLabelText("Naam"), "Huur");
+      await userEvent.click(screen.getByRole("button", { name: "Annuleren" }));
+      await openAddDialog();
+
+      expect(screen.getByLabelText("Naam")).toHaveValue("");
+    });
   });
 
   describe("editing a post", () => {
@@ -195,6 +206,22 @@ describe("BeheerSheet", () => {
 
       expect(screen.getByLabelText("Naam")).toHaveValue("Ziggo");
       expect(screen.getByLabelText("Verwacht bedrag")).toHaveValue("45,50");
+    });
+
+    it("pre-fills whichever post was picked, not the one edited before", async () => {
+      renderSheet({
+        items: [
+          aRecurringItem({ id: 1, name: "Ziggo", expectedCents: 4_550 }),
+          aRecurringItem({ id: 2, name: "Huur", expectedCents: 100_000 }),
+        ],
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Ziggo bewerken" }));
+      await userEvent.click(screen.getByRole("button", { name: "Annuleren" }));
+      await userEvent.click(screen.getByRole("button", { name: "Huur bewerken" }));
+
+      expect(screen.getByLabelText("Naam")).toHaveValue("Huur");
+      expect(screen.getByLabelText("Verwacht bedrag")).toHaveValue("1000,00");
     });
 
     it("saves the edited name and amount against that post", async () => {

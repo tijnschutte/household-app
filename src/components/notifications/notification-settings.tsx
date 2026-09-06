@@ -13,6 +13,13 @@ import {
 import { Separator } from "@/src/components/ui/separator";
 import { Switch } from "@/src/components/ui/switch";
 import { NOTIFICATION_TOPICS, type NotificationTopic } from "@/src/lib/notifications/topics";
+import {
+  currentSubscription,
+  pushSupport,
+  signedWithCurrentKey,
+  subscribeThisDevice,
+  type PushSupport,
+} from "@/src/lib/notifications/push-device";
 
 /**
  * The three operations this card needs, owned here rather than imported from
@@ -31,45 +38,10 @@ type NotificationSettingsProps = {
 } & NotificationSettingsActions;
 
 /**
- * Why this device can't receive notifications, when it can't. "needs-install"
- * is the one worth explaining: iOS grants Web Push only to a PWA that has been
- * added to the home screen, so a user in Safari sees a fixable instruction
- * rather than a dead switch.
+ * What the device switch shows: still finding out, one of the reasons push
+ * can't work here (see PushSupport), or whether this device is subscribed.
  */
-type DeviceState = "checking" | "unsupported" | "needs-install" | "off" | "on";
-
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-
-/**
- * The VAPID key travels as URL-safe base64, but `pushManager.subscribe` wants
- * the raw bytes.
- */
-function decodeVapidKey(base64: string): Uint8Array {
-  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4))
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
-function isIosSafariInATab(): boolean {
-  const iOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-  return iOS && !window.matchMedia("(display-mode: standalone)").matches;
-}
-
-/**
- * Whether a subscription was made against the key this server still signs
- * with. After the VAPID pair is rotated, every existing subscription keeps
- * working from the browser's point of view but the push service rejects our
- * pushes to it — a silence nobody is told about, on both ends. Comparing the
- * keys is the only way to notice.
- */
-function matchesCurrentKey(subscription: PushSubscription, current: Uint8Array): boolean {
-  const used = subscription.options.applicationServerKey;
-  if (!used) return false;
-  const bytes = new Uint8Array(used);
-  return bytes.length === current.length && bytes.every((byte, i) => byte === current[i]);
-}
+type DeviceState = "checking" | Exclude<PushSupport, "supported"> | "off" | "on";
 
 export default function NotificationSettings({
   mutedTopics,
@@ -87,25 +59,21 @@ export default function NotificationSettings({
     let cancelled = false;
 
     const detect = async () => {
-      if (!VAPID_PUBLIC_KEY || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-        if (!cancelled) setDevice(isIosSafariInATab() ? "needs-install" : "unsupported");
+      const support = pushSupport();
+      if (support !== "supported") {
+        if (!cancelled) setDevice(support);
         return;
       }
-      const registration = await navigator.serviceWorker.ready;
-      const currentKey = decodeVapidKey(VAPID_PUBLIC_KEY);
-      let existing = await registration.pushManager.getSubscription();
+      let existing = await currentSubscription();
       if (cancelled) return;
 
       // A subscription signed against a retired key can never be pushed to
       // again. Permission is already granted, so trading it for a fresh one
       // needs no gesture and nobody has to notice a rotation happened.
-      if (existing && !matchesCurrentKey(existing, currentKey)) {
+      if (existing && !signedWithCurrentKey(existing)) {
         await onForgetDevice(existing.endpoint);
         await existing.unsubscribe();
-        existing = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: currentKey,
-        });
+        existing = await subscribeThisDevice();
       }
 
       // The browser is the source of truth for whether this device is
@@ -132,10 +100,8 @@ export default function NotificationSettings({
   const switchDevice = async (on: boolean) => {
     setSwitchingDevice(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
-
       if (!on) {
-        const existing = await registration.pushManager.getSubscription();
+        const existing = await currentSubscription();
         if (existing) {
           await onForgetDevice(existing.endpoint);
           await existing.unsubscribe();
@@ -156,10 +122,7 @@ export default function NotificationSettings({
         return;
       }
 
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: decodeVapidKey(VAPID_PUBLIC_KEY!),
-      });
+      const subscription = await subscribeThisDevice();
       await onRegisterDevice(subscription.toJSON());
       setDevice("on");
       toast.success("Meldingen staan aan op dit apparaat");

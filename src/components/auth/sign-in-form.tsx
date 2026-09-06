@@ -93,6 +93,7 @@ export default function SignInForm() {
             }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
             tabIndex={-1}
+            aria-label={showPassword ? "Wachtwoord verbergen" : "Wachtwoord tonen"}
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>

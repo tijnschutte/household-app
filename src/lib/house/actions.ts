@@ -1,7 +1,6 @@
 "use server";
 
 import { after } from "next/server";
-import { Prisma } from "@prisma/client";
 import prisma from "@/src/lib/db/db";
 import { executeAction } from "@/src/lib/executeAction";
 import { DomainError } from "@/src/lib/domain-error";
@@ -42,6 +41,21 @@ async function categoryOnList(
 
   const category = await prisma.category.findFirst({ where: { id: categoryId, ...where } });
   return category?.id ?? null;
+}
+
+/** The same check for a batch: which of these categories are on the caller's lists. */
+async function categoriesOnList(
+  categoryIds: Array<number | null>,
+  where: Record<string, unknown>
+): Promise<Set<number>> {
+  const wanted = categoryIds.filter((id): id is number => id !== null);
+  if (wanted.length === 0) return new Set();
+
+  const found = await prisma.category.findMany({
+    where: { id: { in: wanted }, ...where },
+    select: { id: true },
+  });
+  return new Set(found.map((category) => category.id));
 }
 
 /** The same check, for the callers that must refuse rather than file the row uncategorized. */
@@ -161,37 +175,32 @@ type RestoreItem = {
  */
 export async function restoreItems(items: RestoreItem[]) {
   const caller = await requireUser();
+  const restorable = items.filter((item) => item.personal || caller.householdId != null);
 
-  let restored = 0;
-  for (const item of items) {
-    if (!item.personal && caller.householdId == null) continue;
+  // A category from another list is dropped rather than refused: the undo
+  // still puts the item back, it just lands uncategorized.
+  const ownedCategoryIds = await categoriesOnList(
+    restorable.map((item) => item.categoryId),
+    scopeToOwned(caller)
+  );
 
-    // A category from another list is dropped rather than refused: the undo
-    // still puts the item back, it just lands uncategorized.
-    const categoryId = await categoryOnList(item.categoryId, scopeToOwned(caller));
-
-    try {
-      await prisma.grocery.create({
-        data: {
-          name: item.name,
-          categoryId,
-          bought: item.bought ?? true,
-          quantity: item.quantity ?? null,
-          unit: item.unit ?? null,
-          ...ownerOfList(caller, item.personal),
-        },
-      });
-      restored++;
-    } catch (error) {
-      // The name came back while the undo was still on screen. Skip it rather
-      // than failing the rest of the batch.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        continue;
-      }
-      throw error;
-    }
-  }
-  return restored;
+  // One insert, in the order the items were given so they come back with
+  // ascending ids as they would have one by one. `skipDuplicates` is the
+  // per-row P2002 catch: a name that came back while the undo was on screen
+  // is skipped rather than failing the rest of the batch.
+  const result = await prisma.grocery.createMany({
+    data: restorable.map((item) => ({
+      name: item.name,
+      categoryId:
+        item.categoryId !== null && ownedCategoryIds.has(item.categoryId) ? item.categoryId : null,
+      bought: item.bought ?? true,
+      quantity: item.quantity ?? null,
+      unit: item.unit ?? null,
+      ...ownerOfList(caller, item.personal),
+    })),
+    skipDuplicates: true,
+  });
+  return result.count;
 }
 
 export async function updateGroceryName(groceryId: number, name: string) {

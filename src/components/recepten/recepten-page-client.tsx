@@ -20,7 +20,10 @@ import type { RecipeSummary, RecipeTagView } from "@/src/lib/recepten/view";
 
 /** The trigger reads as the selection itself, so the filter is visible without opening it. */
 function tagFilterLabel(tags: RecipeTagView[], selected: Set<number>): string {
-  const names = tags.filter((tag) => selected.has(tag.id)).map((tag) => tag.name);
+  const names: string[] = [];
+  for (const tag of tags) {
+    if (selected.has(tag.id)) names.push(tag.name);
+  }
   if (names.length === 0) return "Alle categorieën";
   if (names.length <= 2) return names.join(", ");
   return `${names.length} categorieën`;

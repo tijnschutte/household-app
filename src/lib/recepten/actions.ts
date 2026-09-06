@@ -9,7 +9,7 @@ import { rejectingDuplicates } from "@/src/lib/db/duplicates";
 import { requireHousehold } from "@/src/lib/session";
 import { notifyHousehold } from "@/src/lib/notifications/notify";
 import { recipeAddedToBasket } from "@/src/lib/notifications/topics";
-import { recipeSchema, type RecipeInput } from "@/src/lib/recepten/schema";
+import { recipeSchema, type RecipeInput, type ValidatedRecipe } from "@/src/lib/recepten/schema";
 import { mergeIntoList, type ListRow } from "@/src/lib/recepten/basket";
 import { ownerOfList, scopeToList } from "@/src/lib/house/scope";
 
@@ -50,6 +50,22 @@ async function upsertTags(tx: Tx, householdId: number, names: string[]) {
   );
 }
 
+/**
+ * Both vocabularies a recipe is saved against, in one round trip: ingredients
+ * and tags live in separate tables and neither needs the other's ids, so the
+ * transaction has no reason to wait for one before starting the other.
+ */
+function upsertVocabulary(tx: Tx, householdId: number, validated: ValidatedRecipe) {
+  return Promise.all([
+    upsertIngredients(
+      tx,
+      householdId,
+      validated.ingredients.map((line) => line.name)
+    ),
+    upsertTags(tx, householdId, validated.tags),
+  ]);
+}
+
 function ingredientLines(
   validated: { ingredients: { name: string; quantity: number | null; unit: string | null }[] },
   ingredientIdByName: Map<string, number>
@@ -72,12 +88,7 @@ export async function createRecipe(input: RecipeInput) {
       const validated = recipeSchema.parse(input);
 
       return prisma.$transaction(async (tx) => {
-        const ingredientIdByName = await upsertIngredients(
-          tx,
-          householdId,
-          validated.ingredients.map((line) => line.name)
-        );
-        const tags = await upsertTags(tx, householdId, validated.tags);
+        const [ingredientIdByName, tags] = await upsertVocabulary(tx, householdId, validated);
 
         return rejectingDuplicates(
           () =>
@@ -110,12 +121,7 @@ export async function updateRecipe(id: number, input: RecipeInput) {
           throw new DomainError("Recept niet gevonden");
         }
 
-        const ingredientIdByName = await upsertIngredients(
-          tx,
-          householdId,
-          validated.ingredients.map((line) => line.name)
-        );
-        const tags = await upsertTags(tx, householdId, validated.tags);
+        const [ingredientIdByName, tags] = await upsertVocabulary(tx, householdId, validated);
 
         // The lines are replaced wholesale rather than diffed: a recipe's
         // ingredient list is small and edited as a whole, so there is no

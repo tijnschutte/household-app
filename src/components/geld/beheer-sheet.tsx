@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, CalendarOff } from "lucide-react";
@@ -131,32 +131,24 @@ function NameAndAmountFields({
   );
 }
 
+/**
+ * The three dialogs below are mounted only while they are the one open (see
+ * BeheerSheetBody), so each starts from its props on mount and needs no reset.
+ */
 function AddItemDialog({
   defaultKind,
-  open,
-  onOpenChange,
+  onClose,
   onCreateItem,
 }: {
   defaultKind: RecurringKind;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
 } & Pick<BeheerSheetActions, "onCreateItem">) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<RecurringKind>(defaultKind);
   const [amount, setAmount] = useState("");
-  const [activeFrom, setActiveFrom] = useState(currentMonth());
+  const [activeFrom, setActiveFrom] = useState(currentMonth);
   const [isSaving, setIsSaving] = useState(false);
-
-  // The dialog stays mounted and is opened by a controlled prop, which does not
-  // fire Radix's onOpenChange — so a fresh form has to be an effect on `open`.
-  useEffect(() => {
-    if (!open) return;
-    setName("");
-    setKind(defaultKind);
-    setAmount("");
-    setActiveFrom(currentMonth());
-  }, [open, defaultKind]);
 
   const handleConfirm = async () => {
     const draft = parseItemDraft(name, amount);
@@ -177,7 +169,7 @@ function AddItemDialog({
       }
 
       toast.success("Post aangemaakt");
-      onOpenChange(false);
+      onClose();
       router.refresh();
     } catch (error) {
       console.error("Failed to create recurring item:", error);
@@ -189,10 +181,9 @@ function AddItemDialog({
 
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={(next) => {
-        if (isSaving) return;
-        onOpenChange(next);
+        if (!next && !isSaving) onClose();
       }}
     >
       <DialogContent>
@@ -238,7 +229,7 @@ function AddItemDialog({
           </div>
         </div>
         <DialogFooter className="gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Annuleren
           </Button>
           <Button onClick={handleConfirm} disabled={isSaving}>
@@ -257,29 +248,18 @@ function AddItemDialog({
  */
 function EditItemDialog({
   item,
-  open,
-  onOpenChange,
+  onClose,
   onUpdateItem,
 }: {
-  item: RecurringItemRow | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  item: RecurringItemRow;
+  onClose: () => void;
 } & Pick<BeheerSheetActions, "onUpdateItem">) {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
+  const [name, setName] = useState(item.name);
+  const [amount, setAmount] = useState(() => centsToInputValue(item.expectedCents));
   const [isSaving, setIsSaving] = useState(false);
 
-  // Same programmatic-open caveat as the add dialog, plus this one is reused
-  // for a different item each time it opens.
-  useEffect(() => {
-    if (!open || !item) return;
-    setName(item.name);
-    setAmount(centsToInputValue(item.expectedCents));
-  }, [open, item]);
-
   const handleConfirm = async () => {
-    if (!item) return;
     const draft = parseItemDraft(name, amount);
     if (!draft.ok) {
       toast.error(draft.message);
@@ -295,7 +275,7 @@ function EditItemDialog({
       }
 
       toast.success("Post bijgewerkt");
-      onOpenChange(false);
+      onClose();
       router.refresh();
     } catch (error) {
       console.error("Failed to update recurring item:", error);
@@ -307,10 +287,9 @@ function EditItemDialog({
 
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={(next) => {
-        if (isSaving) return;
-        onOpenChange(next);
+        if (!next && !isSaving) onClose();
       }}
     >
       <DialogContent>
@@ -328,7 +307,7 @@ function EditItemDialog({
           />
         </div>
         <DialogFooter className="gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Annuleren
           </Button>
           <Button onClick={handleConfirm} disabled={isSaving}>
@@ -342,25 +321,17 @@ function EditItemDialog({
 
 function EndItemDialog({
   item,
-  open,
-  onOpenChange,
+  onClose,
   onEndItem,
 }: {
-  item: RecurringItemRow | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  item: RecurringItemRow;
+  onClose: () => void;
 } & Pick<BeheerSheetActions, "onEndItem">) {
   const router = useRouter();
-  const [lastMonth, setLastMonth] = useState(currentMonth());
+  const [lastMonth, setLastMonth] = useState(currentMonth);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Same programmatic-open caveat as ItemFormDialog: re-seed via effect.
-  useEffect(() => {
-    if (open) setLastMonth(currentMonth());
-  }, [open]);
-
   const handleConfirm = async () => {
-    if (!item) return;
     setIsSaving(true);
     try {
       const result = await onEndItem(item.id, lastMonth);
@@ -370,7 +341,7 @@ function EndItemDialog({
       }
 
       toast.success(`${item.name} beëindigd`);
-      onOpenChange(false);
+      onClose();
       router.refresh();
     } catch (error) {
       console.error("Failed to end recurring item:", error);
@@ -382,15 +353,14 @@ function EndItemDialog({
 
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={(next) => {
-        if (isSaving) return;
-        onOpenChange(next);
+        if (!next && !isSaving) onClose();
       }}
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{item?.name} beëindigen</DialogTitle>
+          <DialogTitle>{item.name} beëindigen</DialogTitle>
           <DialogDescription>
             Kies de laatste maand waarin deze post nog actief is.
           </DialogDescription>
@@ -407,7 +377,7 @@ function EndItemDialog({
           />
         </div>
         <DialogFooter className="gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Annuleren
           </Button>
           <Button onClick={handleConfirm} disabled={isSaving}>
@@ -526,33 +496,91 @@ function RecurringItemRowView({
   );
 }
 
-export default function BeheerSheet({
-  open,
-  onOpenChange,
-  items,
-  autoAddKind = null,
-  onCreateItem,
-  onUpdateItem,
-  onEndItem,
-  onDeleteItem,
-}: {
+/** Which dialog sits on top of the list, and what it was opened for. They are
+    modal, so at most one at a time. */
+type OpenDialog =
+  | { type: "add"; defaultKind: RecurringKind }
+  | { type: "edit"; item: RecurringItemRow }
+  | { type: "end"; item: RecurringItemRow };
+
+type BeheerSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: RecurringItemRow[];
   /** When set, opens the "add" dialog with this kind preselected as soon as
       the sheet opens (section-header "+" and empty-state CTA). */
   autoAddKind?: RecurringKind | null;
-} & BeheerSheetActions) {
-  const [addOpen, setAddOpen] = useState(false);
-  const [editItem, setEditItem] = useState<RecurringItemRow | null>(null);
-  const [endItem, setEndItem] = useState<RecurringItemRow | null>(null);
+} & BeheerSheetActions;
 
-  // The sheet opens programmatically (controlled `open`), so the auto-opened
-  // add dialog can't hang off onOpenChange.
-  useEffect(() => {
-    if (open && autoAddKind) setAddOpen(true);
-  }, [open, autoAddKind]);
+/**
+ * Lives inside SheetContent, which Radix mounts only while the sheet is open:
+ * every open starts from a clean slate, so `autoAddKind` can seed the initial
+ * dialog directly instead of being mirrored into state by an effect.
+ */
+function BeheerSheetBody({
+  items,
+  autoAddKind,
+  onCreateItem,
+  onUpdateItem,
+  onEndItem,
+  onDeleteItem,
+}: Omit<BeheerSheetProps, "open" | "onOpenChange">) {
+  const [dialog, setDialog] = useState<OpenDialog | null>(() =>
+    autoAddKind ? { type: "add", defaultKind: autoAddKind } : null
+  );
+  const closeDialog = () => setDialog(null);
 
+  return (
+    <>
+      <div className="flex-1 overflow-y-auto py-2">
+        {items.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">Nog geen posten toegevoegd.</p>
+        ) : (
+          <div className="divide-y divide-border">
+            {items.map((item) => (
+              <RecurringItemRowView
+                key={item.id}
+                item={item}
+                onEdit={() => setDialog({ type: "edit", item })}
+                onEnd={() => setDialog({ type: "end", item })}
+                onDeleteItem={onDeleteItem}
+              />
+            ))}
+          </div>
+        )}
+        <Button
+          variant="ghost"
+          onClick={() =>
+            setDialog({
+              type: "add",
+              defaultKind: autoAddKind ?? RECURRING_KIND.CONTRIBUTION,
+            })
+          }
+          className="mt-2 h-11 w-full justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-normal text-muted-foreground hover:text-foreground"
+        >
+          <Plus className="h-4 w-4" />
+          Post toevoegen
+        </Button>
+      </div>
+
+      {dialog?.type === "add" && (
+        <AddItemDialog
+          defaultKind={dialog.defaultKind}
+          onClose={closeDialog}
+          onCreateItem={onCreateItem}
+        />
+      )}
+      {dialog?.type === "edit" && (
+        <EditItemDialog item={dialog.item} onClose={closeDialog} onUpdateItem={onUpdateItem} />
+      )}
+      {dialog?.type === "end" && (
+        <EndItemDialog item={dialog.item} onClose={closeDialog} onEndItem={onEndItem} />
+      )}
+    </>
+  );
+}
+
+export default function BeheerSheet({ open, onOpenChange, ...body }: BeheerSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="flex h-[85vh] flex-col gap-0 overflow-hidden">
@@ -560,51 +588,8 @@ export default function BeheerSheet({
           <SheetTitle>Vaste posten</SheetTitle>
           <SheetDescription>Beheer de inleg en uitgaven van het huishouden.</SheetDescription>
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto py-2">
-          {items.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">Nog geen posten toegevoegd.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {items.map((item) => (
-                <RecurringItemRowView
-                  key={item.id}
-                  item={item}
-                  onEdit={() => setEditItem(item)}
-                  onEnd={() => setEndItem(item)}
-                  onDeleteItem={onDeleteItem}
-                />
-              ))}
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            onClick={() => setAddOpen(true)}
-            className="mt-2 h-11 w-full justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-normal text-muted-foreground hover:text-foreground"
-          >
-            <Plus className="h-4 w-4" />
-            Post toevoegen
-          </Button>
-        </div>
+        <BeheerSheetBody {...body} />
       </SheetContent>
-
-      <AddItemDialog
-        defaultKind={autoAddKind ?? RECURRING_KIND.CONTRIBUTION}
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onCreateItem={onCreateItem}
-      />
-      <EditItemDialog
-        item={editItem}
-        open={editItem !== null}
-        onOpenChange={(next) => !next && setEditItem(null)}
-        onUpdateItem={onUpdateItem}
-      />
-      <EndItemDialog
-        item={endItem}
-        open={endItem !== null}
-        onOpenChange={(next) => !next && setEndItem(null)}
-        onEndItem={onEndItem}
-      />
     </Sheet>
   );
 }

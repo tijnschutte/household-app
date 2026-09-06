@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RecipeDetailClient from "./recipe-detail-client";
 import type { RecipeDetail } from "@/src/lib/recepten/view";
@@ -121,7 +121,9 @@ describe("RecipeDetailClient", () => {
       await user.click(button);
 
       expect(button).toBeDisabled();
+
       resolveAdd();
+      await waitFor(() => expect(button).toBeEnabled());
     });
 
     it("reads 'Al in mandje' straight away when the server already says onList", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, within, fireEvent } from "@testing-library/react";
+import { render, screen, within, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import GroceryList from "./grocery-list";
 import { aCategory, aGrocery } from "@/tests/fixtures/house";
@@ -163,6 +163,21 @@ describe("GroceryList", () => {
         [1, true],
         [2, false],
       ]);
+    });
+
+    it("is a real toggle: reachable and flippable from the keyboard, and says whether it is ticked", async () => {
+      const list = renderList({
+        groceryList: [
+          aGrocery({ id: 1, name: "melk", bought: false }),
+          aGrocery({ id: 2, name: "brood", bought: true }),
+        ],
+      });
+
+      expect(screen.getByRole("button", { name: "brood", pressed: true })).toBeInTheDocument();
+      screen.getByRole("button", { name: "melk", pressed: false }).focus();
+      await userEvent.keyboard("{Enter}");
+
+      expect(list.toggled).toEqual([[1, true]]);
     });
 
     it("treats a row that was never given a bought value as unchecked", async () => {
@@ -347,10 +362,11 @@ describe("GroceryList", () => {
     describe("when the gesture belongs to dnd-kit", () => {
       afterEach(() => new Promise((resolve) => setTimeout(resolve, CLICK_SUPPRESSION_MS + 10)));
 
-      it("leaves a gesture that starts on the drag handle alone", () => {
+      it("leaves a gesture that starts on the drag handle alone", async () => {
         const { container } = renderList(oneItem);
 
-        swipeOpen(container.querySelector("[data-drag-handle]")!);
+        // dnd-kit settles its drop animation a tick after pointerUp; wait for it.
+        await act(async () => swipeOpen(container.querySelector("[data-drag-handle]")!));
 
         expect(deleteAction()).not.toBeInTheDocument();
       });

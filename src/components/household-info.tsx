@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import type { HouseholdWithMembers } from "@/src/lib/membership/view";
 import {
@@ -45,18 +45,25 @@ type HouseholdInfoProps = {
   userId: number;
 } & HouseholdInfoActions;
 
+/**
+ * Whether this browser has a share sheet. The server has no navigator and most
+ * desktop browsers have no share, so the server snapshot says no; a browser
+ * that can share flips to yes during hydration, before the first paint.
+ */
+const neverChanges = () => () => {};
+function useCanShare(): boolean {
+  return useSyncExternalStore(
+    neverChanges,
+    () => !!navigator.share,
+    () => false
+  );
+}
+
 export default function HouseholdInfo({ household, userId, onLeaveHousehold }: HouseholdInfoProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
-  const [canShare, setCanShare] = useState(false);
-
-  // Feature-detect navigator.share in an effect (not render) to avoid a
-  // server/client hydration mismatch, since navigator is unavailable on
-  // the server and unsupported in most desktop browsers.
-  useEffect(() => {
-    setCanShare(typeof navigator !== "undefined" && !!navigator.share);
-  }, []);
+  const canShare = useCanShare();
 
   const copySecret = async () => {
     if (!household.secret) return;
@@ -153,13 +160,20 @@ export default function HouseholdInfo({ household, userId, onLeaveHousehold }: H
               readOnly
               className="h-12 font-mono text-lg font-semibold"
             />
-            <Button size="icon" variant="outline" onClick={copySecret} disabled={!household.secret}>
+            <Button
+              size="icon"
+              variant="outline"
+              aria-label="Huishoudcode kopiëren"
+              onClick={copySecret}
+              disabled={!household.secret}
+            >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             </Button>
             {canShare && (
               <Button
                 size="icon"
                 variant="outline"
+                aria-label="Huishoudcode delen"
                 onClick={shareSecret}
                 disabled={!household.secret}
               >

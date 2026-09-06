@@ -82,11 +82,24 @@ function SegmentedControl({
   );
 }
 
-function paragraphs(instructions: string): string[] {
-  return instructions
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
+/**
+ * A paragraph has no id of its own, so its position in the instructions text
+ * stands in for one: unique among siblings even when two paragraphs read the
+ * same, and stable for as long as the text is.
+ */
+type Paragraph = { offset: number; text: string };
+
+function paragraphs(instructions: string): Paragraph[] {
+  const result: Paragraph[] = [];
+  let offset = 0;
+  // The capturing group keeps the separators in the output, so the offset
+  // stays right without knowing how many blank lines sat between paragraphs.
+  for (const piece of instructions.split(/(\n\s*\n)/)) {
+    const text = piece.trim();
+    if (text) result.push({ offset, text });
+    offset += piece.length;
+  }
+  return result;
 }
 
 /**
@@ -193,6 +206,7 @@ export default function RecipeDetailClient({
   const [suggestOpen, setSuggestOpen] = useState(false);
 
   const alreadyOnList = recipe.onList || wasAdded;
+  const instructionParagraphs = paragraphs(recipe.instructions);
 
   const runAddToBasket = async () => {
     setBasketState("pending");
@@ -292,10 +306,10 @@ export default function RecipeDetailClient({
           </div>
         ) : (
           <div className="space-y-4">
-            {paragraphs(recipe.instructions).length > 0 ? (
-              paragraphs(recipe.instructions).map((paragraph, index) => (
-                <p key={index} className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {paragraph}
+            {instructionParagraphs.length > 0 ? (
+              instructionParagraphs.map((paragraph) => (
+                <p key={paragraph.offset} className="text-sm leading-relaxed whitespace-pre-wrap">
+                  {paragraph.text}
                 </p>
               ))
             ) : (

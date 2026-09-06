@@ -32,9 +32,9 @@ export async function notifyHousehold(
     );
 
     await Promise.all(
-      outcomes
-        .filter(({ outcome }) => outcome === "gone")
-        .map(({ device }) => audience.forget(device.endpoint))
+      outcomes.flatMap(({ device, outcome }) =>
+        outcome === "gone" ? [audience.forget(device.endpoint)] : []
+      )
     );
   } catch (error) {
     // Off the critical path, so isolate and log rather than crash — but log

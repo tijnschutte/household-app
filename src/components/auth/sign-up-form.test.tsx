@@ -83,9 +83,10 @@ describe("SignUpForm", () => {
     const password = screen.getByLabelText("Wachtwoord");
     expect(password).toHaveAttribute("type", "password");
 
-    await userEvent.click(screen.getByRole("button", { name: "" }));
+    await userEvent.click(screen.getByRole("button", { name: "Wachtwoord tonen" }));
 
     expect(screen.getByLabelText("Wachtwoord")).toHaveAttribute("type", "text");
+    expect(screen.getByRole("button", { name: "Wachtwoord verbergen" })).toBeInTheDocument();
   });
 
   describe("refusing credentials the server would reject anyway", () => {

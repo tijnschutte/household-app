@@ -63,6 +63,13 @@ describe("HouseholdInfo", () => {
     renderInfo({ household: aHousehold({ secret: null }) });
 
     expect(screen.getByLabelText("Huishoudcode")).toHaveValue("N/A");
+    expect(screen.getByRole("button", { name: "Huishoudcode kopiëren" })).toBeDisabled();
+  });
+
+  it("names the icon-only copy button, so a screen reader can find it", () => {
+    renderInfo({ household: aHousehold({ secret: "ZON123" }) });
+
+    expect(screen.getByRole("button", { name: "Huishoudcode kopiëren" })).toBeEnabled();
   });
 
   describe("leaving the household", () => {

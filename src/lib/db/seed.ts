@@ -136,13 +136,15 @@ async function seedHousehold() {
   // Keyed on the join code, not the name: the code is the one thing about this
   // fixture that never changes, so renaming the household still re-seeds onto
   // the same row instead of colliding with it on the unique `secret`.
-  const household = await prisma.household.upsert({
-    where: { secret: HOUSEHOLD.secret },
-    update: { name: HOUSEHOLD.name },
-    create: HOUSEHOLD,
-  });
+  const [household, password] = await Promise.all([
+    prisma.household.upsert({
+      where: { secret: HOUSEHOLD.secret },
+      update: { name: HOUSEHOLD.name },
+      create: HOUSEHOLD,
+    }),
+    bcrypt.hash(PASSWORD, 10),
+  ]);
 
-  const password = await bcrypt.hash(PASSWORD, 10);
   const members = await Promise.all(
     MEMBERS.map(({ name }) =>
       prisma.user.upsert({
@@ -156,22 +158,27 @@ async function seedHousehold() {
   return { household, members };
 }
 
+// Sections are independent of each other; only the groceries wait for their category.
 async function seedList(sections: ListSection[], owner: ListOwner) {
-  for (const section of sections) {
-    const category = await prisma.category.upsert({
-      where: ownedBy(section.category, owner),
-      update: {},
-      create: { name: section.category, ...owner },
-    });
-
-    for (const item of section.items) {
-      await prisma.grocery.upsert({
-        where: ownedBy(item.name, owner),
+  await Promise.all(
+    sections.map(async (section) => {
+      const category = await prisma.category.upsert({
+        where: ownedBy(section.category, owner),
         update: {},
-        create: { ...item, categoryId: category.id, ...owner },
+        create: { name: section.category, ...owner },
       });
-    }
-  }
+
+      await Promise.all(
+        section.items.map((item) =>
+          prisma.grocery.upsert({
+            where: ownedBy(item.name, owner),
+            update: {},
+            create: { ...item, categoryId: category.id, ...owner },
+          })
+        )
+      );
+    })
+  );
 }
 
 type RecipeSeed = {
@@ -266,27 +273,33 @@ async function seedRecipes(householdId: number) {
   }
 }
 
+async function seedRecurringItem(
+  householdId: number,
+  month: string,
+  item: (typeof RECURRING_ITEMS)[number]
+) {
+  const recurringItem = await prisma.recurringItem.upsert({
+    where: { householdId_name_kind: { householdId, name: item.name, kind: item.kind } },
+    update: {},
+    create: { householdId, ...item },
+  });
+
+  const paid = PAID_THIS_MONTH[item.name];
+  if (paid === undefined) return;
+
+  await prisma.monthEntry.upsert({
+    where: { recurringItemId_month: { recurringItemId: recurringItem.id, month } },
+    update: {},
+    create: {
+      recurringItemId: recurringItem.id,
+      month,
+      amountCents: paid === "expected" ? item.expectedCents : paid,
+    },
+  });
+}
+
 async function seedGeld(householdId: number, month: string) {
-  for (const item of RECURRING_ITEMS) {
-    const recurringItem = await prisma.recurringItem.upsert({
-      where: { householdId_name_kind: { householdId, name: item.name, kind: item.kind } },
-      update: {},
-      create: { householdId, ...item },
-    });
-
-    const paid = PAID_THIS_MONTH[item.name];
-    if (paid === undefined) continue;
-
-    await prisma.monthEntry.upsert({
-      where: { recurringItemId_month: { recurringItemId: recurringItem.id, month } },
-      update: {},
-      create: {
-        recurringItemId: recurringItem.id,
-        month,
-        amountCents: paid === "expected" ? item.expectedCents : paid,
-      },
-    });
-  }
+  await Promise.all(RECURRING_ITEMS.map((item) => seedRecurringItem(householdId, month, item)));
 
   // Adjustments carry no natural key, so re-seeding would stack duplicates.
   const existing = await prisma.adjustment.findFirst({ where: { householdId, month } });

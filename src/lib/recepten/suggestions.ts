@@ -25,18 +25,22 @@ export function suggestRecipes(
 ): RecipeSuggestion[] {
   const recipeNames = new Set(recipe.ingredientNames.map(normalize));
 
-  const ranked = others
-    .filter((other) => other.id !== recipe.id)
-    .map((other) => {
-      const otherNames = new Set(other.ingredientNames.map(normalize));
-      const union = new Set([...recipeNames, ...otherNames]);
-      // Shown in the other recipe's own spelling/casing, not the normalised
-      // form used to match them.
-      const shared = other.ingredientNames.filter((name) => recipeNames.has(normalize(name)));
-      const similarity = union.size === 0 ? 0 : shared.length / union.size;
-      return { recipeId: other.id, title: other.title, shared, similarity };
-    })
-    .filter((suggestion) => suggestion.shared.length >= 1);
+  const ranked: (RecipeSuggestion & { similarity: number })[] = [];
+  for (const other of others) {
+    if (other.id === recipe.id) continue;
+    // Shown in the other recipe's own spelling/casing, not the normalised
+    // form used to match them.
+    const shared = other.ingredientNames.filter((name) => recipeNames.has(normalize(name)));
+    if (shared.length === 0) continue;
+
+    const union = new Set([...recipeNames, ...other.ingredientNames.map(normalize)]);
+    ranked.push({
+      recipeId: other.id,
+      title: other.title,
+      shared,
+      similarity: shared.length / union.size,
+    });
+  }
 
   ranked.sort((a, b) => {
     if (b.similarity !== a.similarity) return b.similarity - a.similarity;
