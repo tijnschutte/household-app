@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { visibleTabs, type OptionalModule } from "@/src/lib/modules/modules";
@@ -18,10 +18,10 @@ export default function BottomTabBar({ hiddenModules }: { hiddenModules: Optiona
   const tabs = visibleTabs(hiddenModules);
   const pathname = usePathname();
   // Highlight the tapped tab immediately; the server-rendered page can take a
-  // moment to arrive and pathname only updates once it has.
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
-
-  useEffect(() => setPendingHref(null), [pathname]);
+  // moment to arrive and pathname only updates once it has. The tap remembers
+  // the pathname it happened on, so it stops counting the moment that changes.
+  const [tap, setTap] = useState<{ href: string; from: string } | null>(null);
+  const pendingHref = tap && tap.from === pathname ? tap.href : null;
 
   return (
     <nav
@@ -43,7 +43,7 @@ export default function BottomTabBar({ hiddenModules }: { hiddenModules: Optiona
               key={href}
               href={href}
               aria-current={current ? "page" : undefined}
-              onClick={() => setPendingHref(href)}
+              onClick={() => setTap({ href, from: pathname })}
               className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors active:bg-accent ${
                 active ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}

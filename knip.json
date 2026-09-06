@@ -18,9 +18,7 @@
   "entry": ["worker/index.ts"],
 
   "ignoreDependencies": [
-    // Consumed by config, not by an import: eslint.config.mjs extends
-    // eslint-config-next, and tailwind ships CLI binaries.
-    "eslint-config-next",
+    // Consumed by config, not by an import: tailwind ships CLI binaries.
     "tailwindcss-cli",
     "@tailwindcss/forms",
     "tailwindcss-animate",

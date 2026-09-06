@@ -11,7 +11,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
@@ -29,7 +29,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "src/lib/lib/placeholder-data.ts",
-    "scripts/seed.js"
+    "scripts/seed.js",
+    ".next/dev/types/**/*.ts"
   ],
   // worker/ has its own project: it runs in a service worker, where lib.dom's
   // declarations are the wrong ones. `bun run typecheck` checks both.

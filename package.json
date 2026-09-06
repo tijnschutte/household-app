@@ -1,10 +1,10 @@
 {
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "dev:local": "bun run db:up && bun run db:migrate && bun run dev",
     "dev:fresh": "bun run db:up && bun run db:reset && bun run dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint --fix",
@@ -27,7 +27,8 @@
     "db:seed": "bunx prisma db seed",
     "db:reset": "bunx prisma migrate reset --force",
     "db:studio": "bunx prisma studio",
-    "prepare": "husky"
+    "prepare": "husky",
+    "doctor": "npx react-doctor@latest"
   },
   "prisma": {
     "schema": "src/lib/db/schema.prisma",
@@ -50,11 +51,11 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.477.0",
-    "next": "15.2.8",
-    "next-auth": "5.0.0-beta.25",
+    "next": "16.3.4",
+    "next-auth": "5.0.0-beta.32",
     "postcss": "^8.5.3",
-    "react": "latest",
-    "react-dom": "latest",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "react-hook-form": "^7.54.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.0.2",
@@ -65,7 +66,6 @@
   },
   "devDependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
-    "@eslint/eslintrc": "^3.3.5",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/postcss": "^4.0.13",
@@ -73,13 +73,13 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.3",
     "@types/node": "22.10.7",
-    "@types/react": "19.0.7",
-    "@types/react-dom": "19.0.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.5",
     "dependency-cruiser": "^18.1.1",
     "eslint": "^9",
-    "eslint-config-next": "15.2.8",
+    "eslint-config-next": "16.3.4",
     "eslint-config-prettier": "^10.1.8",
     "happy-dom": "^20.11.1",
     "husky": "^9.1.7",
@@ -87,9 +87,11 @@
     "lint-staged": "^17.0.8",
     "prettier": "^3.9.4",
     "prisma": "^6.5.0",
+    "react-doctor": "^0.9.13",
     "tailwindcss-animate": "^1.0.7",
     "tailwindcss-cli": "^0.1.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "vitest-fail-on-console": "^0.10.1"
   },
   "trustedDependencies": [
     "@prisma/client",

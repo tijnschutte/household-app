@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Plus } from "lucide-react";
@@ -43,27 +43,23 @@ export type ItemSectionActions = {
   onUndoPaid: (recurringItemId: number, month: string) => Promise<ActionResult>;
 };
 
+/**
+ * Mounted only while open, so every opening starts from the expected amount
+ * without an effect re-seeding a dialog that stayed mounted.
+ */
 function MarkPaidDialog({
   item,
   month,
-  open,
-  onOpenChange,
+  onClose,
   onMarkPaid,
 }: {
   item: GeldItem;
   month: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
 } & Pick<ItemSectionActions, "onMarkPaid">) {
   const router = useRouter();
   const [value, setValue] = useState(() => centsToInputValue(item.expectedCents));
   const [isSaving, setIsSaving] = useState(false);
-
-  // The dialog stays mounted and `open` changes programmatically (no Radix
-  // onOpenChange), so re-seed the amount on every open.
-  useEffect(() => {
-    if (open) setValue(centsToInputValue(item.expectedCents));
-  }, [open, item.expectedCents]);
 
   const handleConfirm = async () => {
     const cents = parseEuroToCents(value);
@@ -83,7 +79,7 @@ function MarkPaidDialog({
       }
 
       toast.success(`${item.name} gemarkeerd als betaald`);
-      onOpenChange(false);
+      onClose();
       router.refresh();
     } catch (error) {
       console.error("Failed to mark paid:", error);
@@ -95,9 +91,9 @@ function MarkPaidDialog({
 
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={(next) => {
-        if (!isSaving) onOpenChange(next);
+        if (!next && !isSaving) onClose();
       }}
     >
       <DialogContent>
@@ -117,7 +113,7 @@ function MarkPaidDialog({
           />
         </div>
         <DialogFooter className="gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Annuleren
           </Button>
           <Button onClick={handleConfirm} disabled={isSaving}>
@@ -190,13 +186,14 @@ function ItemRow({
         </span>
       </button>
 
-      <MarkPaidDialog
-        item={item}
-        month={month}
-        open={markPaidOpen}
-        onOpenChange={setMarkPaidOpen}
-        onMarkPaid={onMarkPaid}
-      />
+      {markPaidOpen && (
+        <MarkPaidDialog
+          item={item}
+          month={month}
+          onClose={() => setMarkPaidOpen(false)}
+          onMarkPaid={onMarkPaid}
+        />
+      )}
 
       <AlertDialog open={undoOpen} onOpenChange={(next) => !isUndoing && setUndoOpen(next)}>
         <AlertDialogContent>
